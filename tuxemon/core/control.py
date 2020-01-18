@@ -32,12 +32,8 @@ import logging
 import os.path
 import time
 
-import pygame as pg
-
 import tuxemon.core.event.eventengine
-from tuxemon.core import prepare
-from tuxemon.core.platform.platform_pygame.events import PygameEventQueueHandler
-from tuxemon.core import cli, networking, rumble
+from tuxemon.core import prepare, cli, networking, rumble
 from tuxemon.core.platform import android
 from tuxemon.core.state import StateManager
 
@@ -58,8 +54,8 @@ class Control(StateManager):
         # Set up our game's configuration from the prepare module.
         self.config = prepare.CONFIG
 
-        # INFO: no need to call superclass for now
-        self.screen = pg.display.get_surface()
+        self.init_platform()
+
         self.caption = caption
         self.done = False
         self.fps = self.config.fps
@@ -80,8 +76,6 @@ class Control(StateManager):
         self._state_stack = list()
         self._state_resume_set = set()
         self._remove_queue = list()
-
-        self.input_manager = PygameEventQueueHandler()
 
         # movie creation
         self.frame_number = 0
@@ -124,6 +118,17 @@ class Control(StateManager):
         # TODO: moar players
         self.player1 = None
 
+    def init_platform(self):
+        """ WIP.  Eventually make options for more input types/handlers
+
+        :return:
+        """
+        import pygame
+        from tuxemon.core.platform.platform_pygame.events import PygameEventQueueHandler
+
+        self.input_manager = PygameEventQueueHandler()
+        self.screen = pygame.display.get_surface()
+
     def add_player(self, player):
         """ Add a player to the game
 
@@ -137,41 +142,6 @@ class Control(StateManager):
 
     def get_player(self):
         return self.player1
-
-    def draw_event_debug(self):
-        """ Very simple overlay of event data.  Needs some love.
-
-        :return:
-        """
-        y = 20
-        x = 4
-
-        yy = y
-        xx = x
-
-        font = pg.font.Font(pg.font.get_default_font(), 15)
-        for event in self.event_engine.partial_events:
-            w = 0
-            for valid, item in event:
-                p = ' '.join(item.parameters)
-                text = "{} {}: {}".format(item.operator, item.type, p)
-                if valid:
-                    color = (0, 255, 0)
-                else:
-                    color = (255, 0, 0)
-                image = font.render(text, 1, color)
-                self.screen.blit(image, (xx, yy))
-                ww, hh = image.get_size()
-                yy += hh
-                w = max(w, ww)
-
-            xx += w + 20
-
-            if xx > 1000:
-                xx = x
-                y += 200
-
-            yy = y
 
     def process_events(self, events):
         """ Process all events for this frame.

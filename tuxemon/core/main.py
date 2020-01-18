@@ -50,7 +50,6 @@ def main(load_slot=None):
     """
     log.configure()
 
-    import pygame
     from tuxemon.core.control import Control
 
     prepare.init()
@@ -104,7 +103,7 @@ def main(load_slot=None):
             action("add_item", ("apple",))
 
     control.main()
-    pygame.quit()
+    # pygame.quit()
 
 
 def headless():

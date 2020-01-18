@@ -37,9 +37,8 @@ import logging
 import os
 from math import hypot
 
-import pygame
-
-from tuxemon.core import db, monster, pyganim
+from tuxemon.compat import Rect
+from tuxemon.core import db, monster
 from tuxemon.core.entity import Entity
 from tuxemon.core.item import Item
 from tuxemon.core.item import decode_inventory, encode_inventory
@@ -153,9 +152,13 @@ class NPC(Entity):
         self.playerWidth = 0
         self.standing = {}  # Standing animation frames
         self.sprite = {}  # Moving animation frames
-        self.moveConductor = pyganim.PygConductor()
+        self.moveConductor = self.new_move_conductor()
         self.load_sprites()
-        self.rect = pygame.Rect(self.tile_pos, (self.playerWidth, self.playerHeight))  # Collision rect
+        self.rect = Rect(self.tile_pos, (self.playerWidth, self.playerHeight))  # Collision rect
+
+    def new_move_conductor(self):
+        from tuxemon.core.pyganim import PygConductor
+        return PygConductor()
 
     def get_state(self, game):
         """Prepares a dictionary of the npc to be saved to a file
@@ -200,71 +203,6 @@ class NPC(Entity):
             'items': decode_inventory(save_data['storage']),
             'monsters': decode_monsters(save_data['storage']),
         }
-
-    def load_sprites(self):
-        """ Load sprite graphics
-
-        :return:
-        """
-        # TODO: refactor animations into renderer
-        # Get all of the player's standing animation images.
-        self.standing = {}
-        for standing_type in facing:
-            filename = "{}_{}.png".format(self.sprite_name, standing_type)
-            path = os.path.join("sprites", filename)
-            self.standing[standing_type] = load_and_scale(path)
-
-        self.playerWidth, self.playerHeight = self.standing["front"].get_size()  # The player's sprite size in pixels
-
-        # avoid cutoff frames when steps don't line up with tile movement
-        frames = 3
-        frame_duration = (1000 / CONFIG.player_walkrate) / frames / 1000 * 2
-
-        # Load all of the player's sprite animations
-        anim_types = ['front_walk', 'back_walk', 'left_walk', 'right_walk']
-        for anim_type in anim_types:
-            images = [
-                'sprites/%s_%s.%s.png' % (
-                    self.sprite_name,
-                    anim_type,
-                    str(num).rjust(3, str('0'))
-                )
-                for num in range(4)
-            ]
-
-            frames = []
-            for image in images:
-                surface = load_and_scale(image)
-                frames.append((surface, frame_duration))
-
-            self.sprite[anim_type] = pyganim.PygAnimation(frames, loop=True)
-
-        # Have the animation objects managed by a conductor.
-        # With the conductor, we can call play() and stop() on all the animation objects
-        # at the same time, so that way they'll always be in sync with each other.
-        self.moveConductor.add(self.sprite)
-
-    def get_sprites(self):
-        """ Get the surfaces and layers for the sprite
-
-        Used to render the player
-
-        :return:
-        """
-
-        def get_frame(d, ani):
-            frame = d[ani]
-            try:
-                surface = frame.getCurrentFrame()
-                frame.rate = self.moverate / CONFIG.player_walkrate
-                return surface
-            except AttributeError:
-                return frame
-
-        # TODO: move out to the world renderer
-        frame_dict = self.sprite if self.moving else self.standing
-        state = animation_mapping[self.moving][self.facing]
-        return [(get_frame(frame_dict, state), self.tile_pos, 2)]
 
     def pathfind(self, destination):
         """ Find a path and also start it

@@ -36,11 +36,10 @@ import operator
 import os.path
 import re
 
-import pygame
+# import pygame
 
-import tuxemon.core.sprite
+from tuxemon.compat import Rect
 from tuxemon.core import prepare
-from tuxemon.core import pyganim
 from tuxemon.core.platform import mixer
 
 logger = logging.getLogger(__name__)
@@ -53,7 +52,7 @@ def strip_from_sheet(sheet, start, size, columns, rows=1):
     for j in range(rows):
         for i in range(columns):
             location = (start[0] + size[0] * i, start[1] + size[1] * j)
-            frames.append(sheet.subsurface(pygame.Rect(location, size)))
+            frames.append(sheet.subsurface(Rect(location, size)))
     return frames
 
 
@@ -62,7 +61,7 @@ def strip_coords_from_sheet(sheet, coords, size):
     frames = []
     for coord in coords:
         location = (coord[0] * size[0], coord[1] * size[1])
-        frames.append(sheet.subsurface(pygame.Rect(location, size)))
+        frames.append(sheet.subsurface(Rect(location, size)))
     return frames
 
 
@@ -159,6 +158,7 @@ def load_sprite(filename, **rect_kwargs):
     :param filename: Filename to load
     :rtype: core.sprite.Sprite
     """
+    import tuxemon.core.sprite
     sprite = tuxemon.core.sprite.Sprite()
     sprite.image = load_and_scale(filename)
     sprite.rect = sprite.image.get_rect(**rect_kwargs)
@@ -170,9 +170,9 @@ def new_scaled_rect(*args, **kwargs):
 
     :param args: Normal args for a Rect
     :param kwargs: Normal kwargs for a Rect
-    :rtype: pygame.rect.Rect
+    :rtype: Rect.Rect
     """
-    rect = pygame.Rect(*args, **kwargs)
+    rect = Rect(*args, **kwargs)
     return scale_rect(rect)
 
 
@@ -181,9 +181,9 @@ def scale_rect(rect, factor=prepare.SCALE):
 
     :param rect: pygame Rect
     :param factor: int
-    :rtype: pygame.rect.Rect
+    :rtype: Rect.Rect
     """
-    return pygame.Rect([i * factor for i in list(rect)])
+    return Rect([i * factor for i in list(rect)])
 
 
 def scale_surface(surface, factor):
@@ -222,6 +222,7 @@ def create_animation(frames, duration, loop):
     :param loop:
     :return:
     """
+    from tuxemon.core import pyganim
     data = [(f, duration) for f in frames]
     animation = pyganim.PygAnimation(data, loop=loop)
     conductor = pyganim.PygConductor({'animation': animation})

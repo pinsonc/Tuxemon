@@ -36,9 +36,7 @@ from __future__ import unicode_literals
 import logging
 import re
 
-import pyscroll
 import pytmx
-from pytmx.util_pygame import load_pygame
 
 from tuxemon.core import prepare
 from tuxemon.core.euclid import Vector2, Vector3, Point2

@@ -36,8 +36,7 @@ import sys
 from abc import ABCMeta
 from importlib import import_module
 
-import pygame
-
+from tuxemon.compat import Rect
 from tuxemon.constants import paths
 from tuxemon.core import prepare
 from tuxemon.core import tools
@@ -69,7 +68,7 @@ class State(object):
     """
     __metaclass__ = ABCMeta
 
-    rect = pygame.Rect((0, 0), prepare.SCREEN_SIZE)
+    rect = Rect((0, 0), prepare.SCREEN_SIZE)
     transparent = False   # ignore all background/borders
     force_draw = False    # draw even if completely under another state
 

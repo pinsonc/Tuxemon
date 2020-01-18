@@ -37,7 +37,7 @@ import logging
 import pprint
 from datetime import datetime
 
-import pygame as pg
+# import pygame as pg
 
 from tuxemon.core import prepare
 from tuxemon.core.middleware import Multiplayer, Controller
