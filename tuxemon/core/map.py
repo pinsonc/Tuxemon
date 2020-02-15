@@ -38,12 +38,10 @@ import re
 
 import pytmx
 
-from tuxemon.core import prepare
 from tuxemon.core.euclid import Vector2, Vector3, Point2
 from tuxemon.core.event import EventObject
 from tuxemon.core.event import MapAction
 from tuxemon.core.event import MapCondition
-from tuxemon.core.graphics import scaled_image_loader
 
 logger = logging.getLogger(__name__)
 
@@ -226,24 +224,13 @@ class Map(object):
         :rtype: None
         """
         self.filename = filename
-
-        # Scale the loaded tiles if enabled
-        if prepare.CONFIG.scaling:
-            self.data = pytmx.TiledMap(filename,
-                                       image_loader=scaled_image_loader,
-                                       pixelalpha=True)
-            self.data.tilewidth, self.data.tileheight = prepare.TILE_SIZE
-        else:
-            self.data = load_pygame(filename, pixelalpha=True)
+        self.data = pytmx.TiledMap(filename)
 
         # Get the properties of the map
         if type(self.data.properties) == dict:
             # Get the edge type of the map
             if "edges" in self.data.properties:
                 self.edges = self.data.properties["edges"]
-
-        # make a scrolling renderer
-        self.renderer = self.initialize_renderer()
 
         # Get the map dimensions
         self.size = self.data.width, self.data.height
@@ -267,16 +254,6 @@ class Map(object):
 
             elif obj.type == 'interact':
                 self.interacts.append(self.loadevent(obj))
-
-    def initialize_renderer(self):
-        """ Initialize the renderer for the map and sprites
-
-        :rtype: pyscroll.BufferedRenderer
-        """
-        # TODO: Use self.edges == "stitched" here when implementing seamless maps
-        visual_data = pyscroll.data.TiledMapData(self.data)
-        clamp = (self.edges == "clamped")
-        return pyscroll.BufferedRenderer(visual_data, prepare.SCREEN_SIZE, clamp_camera = clamp, tall_sprites = 2)
 
     def loadevent(self, obj):
         """
@@ -393,19 +370,6 @@ class Map(object):
         # that the player can't pass through.
         # Loop through all of the collision objects in our tmx file.
         for collision_region in self.collisions:
-
-            # >>> collision_region.__dict__
-            # {'gid': 0,
-            # 'height': 16,
-            # 'name': None,
-            # 'parent': <TiledMap: "resources/maps/pallet_town-room.tmx">,
-            # 'rotation': 0,
-            # 'type': 'collision',
-            # 'visible': 1,
-            # 'width': 16,
-            # 'x': 176,
-            # 'y': 64}
-
             # Get the collision area's tile location and dimension in tiles using the tileset's
             # tile size.
             x = self.round_to_divisible(collision_region.x, self.tile_size[0]) / self.tile_size[0]
@@ -450,23 +414,6 @@ class Map(object):
         # on either side of the poly-line and prevent moving between
         # them
         for collision_line in self.collision_lines:
-
-            # >>> collision_wall.__dict__
-            # {'name': None,
-            # 'parent': <TiledMap: "resources/maps/test_pathfinding.tmx">,
-            # 'visible': 1,
-            # 'height': 160.0,
-            # 'width': 80.0, '
-            # gid': 0,
-            # 'closed': False,
-            # 'y': 80.0, 'x': 80.0,
-            # 'rotation': 0,
-            # 'type': 'collision-wall',
-            # 'points': ((80.0, 80.0), (80.0, 128.0), (160.0, 128.0), (160.0, 240.0))
-
-            # Another example:
-            # 'points': ((192.0, 80.0), (192.0, 192.0))
-
             # For each pair of points, get the tiles on either side of the line.
             # Assumption: A pair of points will only be vertical or horizontal (no diagonal lines)
 
@@ -595,4 +542,3 @@ class Map(object):
         split_list = [i.strip() for i in split_list]
 
         return split_list
-

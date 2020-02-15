@@ -36,11 +36,11 @@ import sys
 from abc import ABCMeta
 from importlib import import_module
 
+import pygame
 import tuxemon.core.graphics
 from tuxemon.compat import Rect
 from tuxemon.constants import paths
 from tuxemon.core import prepare
-from tuxemon.core import tools
 from tuxemon.core.animation import Animation
 from tuxemon.core.animation import Task
 from tuxemon.core.animation import remove_animations_of
@@ -70,8 +70,8 @@ class State(object):
     __metaclass__ = ABCMeta
 
     rect = Rect((0, 0), prepare.SCREEN_SIZE)
-    transparent = False   # ignore all background/borders
-    force_draw = False    # draw even if completely under another state
+    transparent = False  # ignore all background/borders
+    force_draw = False  # draw even if completely under another state
 
     def __init__(self, control):
         """ Do not override this unless there is a special need.
@@ -85,8 +85,8 @@ class State(object):
         self.game = control  # type: tuxemon.core.control.Control
         self.start_time = 0.0
         self.current_time = 0.0
-        # self.animations = pygame.sprite.Group()  # only animations and tasks
-        # self.sprites = SpriteGroup()             # all sprites that draw on the screen
+        self.animations = pygame.sprite.Group()  # only animations and tasks
+        self.sprites = SpriteGroup()  # all sprites that draw on the screen
 
     @property
     def name(self):

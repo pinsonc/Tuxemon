@@ -37,6 +37,8 @@ from tuxemon.core import prepare, cli, networking, rumble
 from tuxemon.core.platform import android
 from tuxemon.core.state import StateManager
 
+import pygame as pg
+
 logger = logging.getLogger(__name__)
 
 

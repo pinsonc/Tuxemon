@@ -337,7 +337,8 @@ class NPC(Entity):
         # TODO: its not possible to move the entity with physics b/c this stops that
         if not self.path:
             self.cancel_movement()
-            self.moveConductor.stop()
+            # stop walking animation
+            # self.moveConductor.stop()
 
     def move_one_tile(self, direction):
         """ Ask entity to move one tile
@@ -392,7 +393,7 @@ class NPC(Entity):
             # it still occasionally happens though!
             # eventually, there will need to be a global clock for the game,
             # not based on wall time, to prevent visual glitches.
-            self.moveConductor.play()
+            # self.moveConductor.play()
             self.network_notify_start_moving(direction)
             self.path_origin = tuple(self.tile_pos)
             self.velocity3 = self.moverate * dirs3[direction]
