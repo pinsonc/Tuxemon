@@ -35,6 +35,7 @@ from __future__ import unicode_literals
 import logging
 import random
 
+import tuxemon.core.graphics
 from tuxemon.core import tools
 from tuxemon.core import ai, db, fusion
 from tuxemon.core.locale import T
@@ -464,9 +465,9 @@ class Monster(object):
         if len(self.sprites):
             return True
 
-        self.sprites["front"] = tools.load_and_scale(self.front_battle_sprite)
-        self.sprites["back"] = tools.load_and_scale(self.back_battle_sprite)
-        self.sprites["menu"] = tools.load_and_scale(self.menu_sprite)
+        self.sprites["front"] = tuxemon.core.graphics.load_and_scale(self.front_battle_sprite)
+        self.sprites["back"] = tuxemon.core.graphics.load_and_scale(self.back_battle_sprite)
+        self.sprites["menu"] = tuxemon.core.graphics.load_and_scale(self.menu_sprite)
         return False
 
     def get_state(self):

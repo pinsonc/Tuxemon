@@ -36,6 +36,7 @@ import sys
 from abc import ABCMeta
 from importlib import import_module
 
+import tuxemon.core.graphics
 from tuxemon.compat import Rect
 from tuxemon.constants import paths
 from tuxemon.core import prepare
@@ -84,8 +85,8 @@ class State(object):
         self.game = control  # type: tuxemon.core.control.Control
         self.start_time = 0.0
         self.current_time = 0.0
-        self.animations = pygame.sprite.Group()  # only animations and tasks
-        self.sprites = SpriteGroup()             # all sprites that draw on the screen
+        # self.animations = pygame.sprite.Group()  # only animations and tasks
+        # self.sprites = SpriteGroup()             # all sprites that draw on the screen
 
     @property
     def name(self):
@@ -102,7 +103,7 @@ class State(object):
         :returns: core.sprite.Sprite
         """
         layer = kwargs.pop('layer', 0)
-        sprite = tools.load_sprite(filename, **kwargs)
+        sprite = tuxemon.core.graphics.load_sprite(filename, **kwargs)
         self.sprites.add(sprite, layer=layer)
         return sprite
 

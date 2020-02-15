@@ -46,7 +46,8 @@ from tuxemon.core.locale import T
 from tuxemon.core.map import proj, facing, dirs3, dirs2, get_direction
 from tuxemon.core.monster import decode_monsters, encode_monsters
 from tuxemon.core.prepare import CONFIG
-from tuxemon.core.tools import nearest, load_and_scale, trunc
+from tuxemon.core.tools import nearest, trunc
+from tuxemon.core.graphics import load_and_scale
 
 logger = logging.getLogger(__name__)
 
@@ -150,10 +151,9 @@ class NPC(Entity):
         # TODO: move sprites into renderer so class can be used headless
         self.playerHeight = 0
         self.playerWidth = 0
-        self.standing = {}  # Standing animation frames
-        self.sprite = {}  # Moving animation frames
-        self.moveConductor = self.new_move_conductor()
-        self.load_sprites()
+        # self.standing = {}  # Standing animation frames
+        # self.sprite = {}  # Moving animation frames
+        # self.moveConductor = self.new_move_conductor()
         self.rect = Rect(self.tile_pos, (self.playerWidth, self.playerHeight))  # Collision rect
 
     def new_move_conductor(self):

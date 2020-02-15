@@ -40,6 +40,7 @@ from itertools import chain
 
 import pygame
 
+import tuxemon.core.graphics
 from tuxemon.core import state, tools
 from tuxemon.core.combat import check_status, fainted, get_awake_monsters, defeated
 from tuxemon.core.locale import T
@@ -497,7 +498,7 @@ class CombatState(CombatAnimations):
         x, y, w, h = self.game.screen.get_rect()
         rect = pygame.Rect(0, 0, w, h // 4)
         rect.bottomright = w, h
-        border = tools.load_and_scale(self.borders_filename)
+        border = tuxemon.core.graphics.load_and_scale(self.borders_filename)
         self.dialog_box = GraphicBox(border, None, self.background_color)
         self.dialog_box.rect = rect
         self.sprites.add(self.dialog_box, layer=100)
@@ -785,7 +786,7 @@ class CombatState(CombatAnimations):
         frame_time = .09
         images = list()
         for fn in technique.images:
-            image = tools.load_and_scale(fn)
+            image = tuxemon.core.graphics.load_and_scale(fn)
             images.append((image, frame_time))
 
         tech = PygAnimation(images, False)
