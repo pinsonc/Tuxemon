@@ -1,3 +1,5 @@
+from tuxemon.core.euclid import Point2, Vector3, Point3, Vector2
+
 # direction => vector
 dirs3 = {
     "up": Vector3(0, -1, 0),
@@ -121,6 +123,7 @@ class Map(object):
     """
     needs new name.  this handles the entities, actions and map of a single map
     """
+
     def __init__(self):
         # Collision lines (player can walk in tiles, but cannot cross
         # from one to another) Items in this list should be in the

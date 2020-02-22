@@ -32,15 +32,13 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import itertools
 import logging
 
 import pygame
-from six.moves import map as imap
 
-from tuxemon.core import prepare, state
 from tuxemon.core import networking
-from tuxemon.core.map_loader import PathfindNode, Map, dirs2, pairs
+from tuxemon.core import prepare, state
+from tuxemon.core.map import PathfindNode, Map, dirs2, pairs
 from tuxemon.core.platform.const import buttons, events, intentions
 from tuxemon.core.tools import nearest
 
