@@ -1,50 +1,3 @@
-# -*- coding: utf-8 -*-
-#
-# Tuxemon
-# Copyright (C) 2014, William Edwards <shadowapex@gmail.com>,
-#                     Benjamin Bean <superman2k5@gmail.com>
-#
-# This file is part of Tuxemon.
-#
-# Tuxemon is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Tuxemon is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Tuxemon.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Contributor(s):
-#
-# William Edwards <shadowapex@gmail.com>
-# Leif Theden <leif.theden@gmail.com>
-#
-#
-# core.map Game map module.
-#
-#
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
-import logging
-import re
-
-import pytmx
-
-from tuxemon.core.euclid import Vector2, Vector3, Point2
-from tuxemon.core.event import EventObject
-from tuxemon.core.event import MapAction
-from tuxemon.core.event import MapCondition
-
-logger = logging.getLogger(__name__)
-
 # direction => vector
 dirs3 = {
     "up": Vector3(0, -1, 0),
@@ -165,380 +118,344 @@ class Tile(object):
 
 
 class Map(object):
-    """Maps are loaded from standard tmx files created from a map editor like Tiled. Events and
-    collision regions are loaded and put in the appropriate data structures for the game to
-    understand.
-
-    **Tiled:** http://www.mapeditor.org/
-
     """
-
-    def __init__(self, filename):
-        self.filename = None
-        self.data = None
-        self.size = None
-        self.renderer = None
-
-        # Initiate the properties of the map at their default values
-        self.edges = ""
-
-        # Get the tile size from a tileset in our map. This is used to calculate the number of tiles
-        # in a collision region.
-        self.tile_size = (0, 0)
-
-        # Collision tiles in tmx object format
-        self.collisions = []
-
+    needs new name.  this handles the entities, actions and map of a single map
+    """
+    def __init__(self):
         # Collision lines (player can walk in tiles, but cannot cross
         # from one to another) Items in this list should be in the
         # form of pairs, signifying that it is NOT possible to travel
         # from the first tile to the second (but reverse may be
         # possible, i.e. jumping) All pairs of tiles must be adjacent
         # (not diagonal)
-        self.collision_lines = []
-
-        self.events = []
-        self.inits = []
-        self.interacts = []
-
-        # Initialize the map
-        self.load(filename)
-
-    def load(self, filename):
-        """Load map data from a tmx map file and get all the map's events and collision areas.
-        Loading the map data is done using the pytmx library.
-
-        Specifications for the TMX map format can be found here:
-        https://github.com/bjorn/tiled/wiki/TMX-Map-Format
-
-        **Examples:**
-
-        In each map, there are three types of objects: **collisions**, **conditions**, and
-        **actions**. Here is how an action would be defined using the Tiled map editor:
-
-        .. image:: images/map/map_editor_action01.png
-
-        :param filename: The path to the tmx map file to load.
-        :type filename: String
-
-        :rtype: None
-        """
-        self.filename = filename
-        self.data = pytmx.TiledMap(filename)
-
-        # Get the properties of the map
-        if type(self.data.properties) == dict:
-            # Get the edge type of the map
-            if "edges" in self.data.properties:
-                self.edges = self.data.properties["edges"]
-
-        # Get the map dimensions
-        self.size = self.data.width, self.data.height
-
-        # Get the tile size of the map
-        self.tile_size = self.data.tilesets[0].tilewidth, self.data.tilesets[0].tileheight
-
-        # Load all objects from the map file and sort them by their type.
-        for obj in self.data.objects:
-            if obj.type == 'collision':
-                self.collisions.append(obj)
-
-            elif obj.type == 'collision-line':
-                self.collision_lines.append(obj)
-
-            elif obj.type == 'event':
-                self.events.append(self.loadevent(obj))
-
-            elif obj.type == 'init':
-                self.inits.append(self.loadevent(obj))
-
-            elif obj.type == 'interact':
-                self.interacts.append(self.loadevent(obj))
-
-    def loadevent(self, obj):
-        """
-
-        :param obj:
-        :rtype: EventObject
-        """
-
-        conds = []
-        acts = []
-
-        # Conditions & actions are stored as Tiled properties.
-        # We need to sort them by name, so that "act1" comes before "act2" and so on..
-        keys = sorted(obj.properties.keys())
-
-        x = int(obj.x / self.tile_size[0])
-        y = int(obj.y / self.tile_size[1])
-        w = int(obj.width / self.tile_size[0])
-        h = int(obj.height / self.tile_size[1])
-
-        for k in keys:
-            if k.startswith('cond'):
-                words = obj.properties[k].split(' ', 2)
-
-                # Conditions have the form 'operator type parameters'.
-                operator, cond_type = words[0:2]
-
-                # If this condition has parameters, split them into a
-                # list
-                if len(words) > 2:
-                    args = self.split_escaped(words[2])
-                else:
-                    args = list()
-
-                # Create a condition object using named tuples
-                condition = MapCondition(cond_type, args, x, y, w, h, operator)
-                conds.append(condition)
-
-            elif k.startswith('act'):
-                words = obj.properties[k].split(' ', 1)
-
-                # Actions have the form 'type parameters'.
-                act_type = words[0]
-
-                # If this action has parameters, split them into a
-                # list
-                if len(words) > 1:
-                    args = self.split_escaped(words[1])
-                else:
-                    args = list()
-
-                # Create an action object using named tuples
-                action = MapAction(act_type, args)
-                acts.append(action)
-
-        for k in keys:
-            if k.startswith('behav'):
-                words = obj.properties[k].split(' ', 1)
-
-                # Actions have the form 'type parameters'.
-                behav_type = words[0]
-
-                # If this action has parameters, split them into a
-                # list
-                if len(words) > 1:
-                    args = self.split_escaped(words[1])
-                else:
-                    args = list()
-
-                if behav_type == "talk":
-                    conds.insert(0, MapCondition("to_talk", args, x, y, w, h, "is"))
-                    acts.insert(0, MapAction("npc_face", [args[0], "player"]))
-
-        # TODO: move this to some post-creation function, as more may be needed
-        # add a player_facing_tile condition automatically
-        if obj.type == "interact":
-            cond_data = MapCondition("player_facing_tile", list(), x, y, w, h, "is")
-            logger.debug(cond_data)
-            conds.append(cond_data)
-
-        return EventObject(obj.id, obj.name, x, y, w, h, conds, acts)
-
-    def loadfile(self):
-        """Loads the tile and collision data from the map file and returns a list of tiles with
-        their position and pygame surface, a set of collision tile coordinates, and the size of
-        the map itself. The list of tile surfaces is used to draw the map in the main game. The
-        list of collision tile coordinates is used for collision detection.
-
-        **Examples:**
-
-        The list of tiles is structured in a way where you can access an individual tile by
-        index number.
-
-        The collision map is a set of (x,y) coordinates that the player cannot walk
-        through. This set is generated based on collision regions defined in the
-        map file.
-
-        :rtype: List
-        :returns: A multi-dimensional list of tiles in dictionary format; a set of collision
-            coordinates; the map size.
-        """
-        # Get the dimensions of the map
-        mapsize = self.size
-
-        # Create a list of all tiles that we cannot walk through
-        collision_map = {}
-
+        self.events = list()
+        self.inits = list()
+        self.interacts = list()
+        self.npcs = dict()
+        # Create a map of all tiles that we cannot walk through
+        self.collision_map = dict()
         # Create a list of all pairs of adjacent tiles that are impassable (aka walls)
         # example: ((5,4),(5,3), both)
-        collision_lines_map = set()
+        self.collision_lines_map = dict()
 
-        # Right now our collisions are defined in our tmx file as large regions that the player
-        # can't pass through. We need to convert these areas into individual tile coordinates
-        # that the player can't pass through.
-        # Loop through all of the collision objects in our tmx file.
-        for collision_region in self.collisions:
-            # Get the collision area's tile location and dimension in tiles using the tileset's
-            # tile size.
-            x = self.round_to_divisible(collision_region.x, self.tile_size[0]) / self.tile_size[0]
-            y = self.round_to_divisible(collision_region.y, self.tile_size[1]) / self.tile_size[1]
-            width = self.round_to_divisible(collision_region.width, self.tile_size[0]) / self.tile_size[0]
-            height = self.round_to_divisible(collision_region.height, self.tile_size[1]) / self.tile_size[1]
+    def broadcast_player_teleport_change(self):
+        """ Tell clients/host that player has moved or changed map after teleport
 
-            # Loop through properties and create list of directions for each property
-            if collision_region.properties:
-                enters = []
-                exits = []
-
-                for key in collision_region.properties:
-                    if "enter" in key:
-                        for direction in collision_region.properties[key].split():
-                            enters.append(direction)
-                    elif "exit" in key:
-                        for direction in collision_region.properties[key].split():
-                            exits.append(direction)
-
-            # Loop through the area of this region and create all the tile coordinates that are
-            # inside this region.
-            for a in range(0, int(width)):
-                for b in range(0, int(height)):
-                    collision_tile = (a + x, b + y)
-                    collision_map[collision_tile] = None
-
-                    # Check if collision region has properties, and is therefore a conditional zone
-                    # then add the location and conditions to semi_collision_map
-                    if collision_region.properties:
-                        tile_conditions = {}
-                        for key in collision_region.properties.keys():
-                            if "enter" in key:
-                                tile_conditions['enter'] = enters
-                            if "exit" in key:
-                                tile_conditions['exit'] = exits
-                            if "continue" in key:
-                                tile_conditions['continue'] = collision_region.properties[key]
-                        collision_map[collision_tile] = tile_conditions
-
-        # Similar to collisions, except we need to identify the tiles
-        # on either side of the poly-line and prevent moving between
-        # them
-        for collision_line in self.collision_lines:
-            # For each pair of points, get the tiles on either side of the line.
-            # Assumption: A pair of points will only be vertical or horizontal (no diagonal lines)
-
-            if len(collision_line.points) < 2:
-                raise Exception("Error: map has polyline with only one point")
-
-            # get two points, and round them
-            point1 = (self.round_to_divisible(collision_line.points[0][0], self.tile_size[0]),
-                      self.round_to_divisible(collision_line.points[0][1], self.tile_size[1]))
-            point2 = (self.round_to_divisible(collision_line.points[1][0], self.tile_size[0]),
-                      self.round_to_divisible(collision_line.points[1][1], self.tile_size[1]))
-
-            # check to see if horizontal or vertical
-            line_type = None
-            if point1[0] == point2[0] and point1[1] != point2[1]:
-                # x's are same, must be vertical
-                line_type = 'vertical'
-            elif point1[0] != point2[0] and point1[1] == point2[1]:
-                # y's are same, must be horizontal
-                line_type = 'horizontal'
-            else:
-                raise Exception("Error: Points on polyline are not strictly horizontal or vertical....")
-
-            if line_type is 'vertical':
-                # get all tile coordinates on either side
-                x = point1[0] / self.tile_size[0]  # same as point2[0] b/c vertical
-                line_start = point1[1]
-                line_end = point2[1]
-                num_tiles_in_line = abs(line_start - line_end) / self.tile_size[1]  # [1] b/c vertical
-                curr_y = line_start / self.tile_size[1]
-                for i in range(int(num_tiles_in_line)):
-                    if line_start > line_end:  # slightly different
-                        # behavior depending on
-                        # direction
-                        left_side_tile = (x - 1, curr_y - 1)
-                        right_side_tile = (x, curr_y - 1)
-                        curr_y -= 1
-                    else:
-                        left_side_tile = (x - 1, curr_y)
-                        right_side_tile = (x, curr_y)
-                        curr_y += 1
-
-                    # TODO - if we want to enable single-direction
-                    # walls (i.e. for jumping) then ask map-designer
-                    # to include a special property for the direction
-                    # to block, and then here we only block in one
-                    # direction, not both.
-                    collision_lines_map.add((left_side_tile, "right"))
-                    collision_lines_map.add((right_side_tile, "left"))
-
-            elif line_type is 'horizontal':
-                # get all tile coordinates on either side
-                y = point1[1] / self.tile_size[1]  # same as point2[1] b/c horizontal
-                line_start = point1[0]
-                line_end = point2[0]
-                num_tiles_in_line = abs(line_start - line_end) / self.tile_size[0]  # [0] b/c horizontal
-                curr_x = line_start / self.tile_size[0]
-                for i in range(int(num_tiles_in_line)):
-                    if line_start > line_end:  # slightly different
-                        # behavior depending on
-                        # direction
-                        top_side_tile = (curr_x - 1, y - 1)
-                        bottom_side_tile = (curr_x - 1, y)
-                        curr_x -= 1
-                    else:
-                        top_side_tile = (curr_x, y - 1)
-                        bottom_side_tile = (curr_x, y)
-                        curr_x += 1
-
-                    # TODO - if we want to enable single-direction
-                    # walls (i.e. for jumping) then ask map-designer
-                    # to include a special property for the direction
-                    # to block, and then here we only block in one
-                    # direction, not both.
-                    collision_lines_map.add((top_side_tile, "down"))
-                    collision_lines_map.add((bottom_side_tile, "up"))
-
-        return collision_map, collision_lines_map, mapsize
-
-    @staticmethod
-    def round_to_divisible(x, base=16):
-        """Rounds a number to a divisible base. This is used to round collision areas that aren't
-        defined well. This function assists in making sure collisions work if the map creator
-        didn't set the collision areas to round numbers.
-
-        **Examples:**
-
-        >>> round_to_divisible(31.23, base=16)
-        32
-        >>> round_to_divisible(17.8, base=16)
-        16
-
-        :param x: The number we want to round.
-        :param base: The base that we want our number to be divisible by. (Default: 16)
-
-        :type x: Float
-        :type base: Integer
-
-        :rtype: Integer
-        :returns: Rounded number that is divisible by "base".
+        :return:
         """
-        return int(base * round(float(x) / base))
+        # Set the transition variable in event_data to false when we're done
+        self.game.event_data["transition"] = False
 
-    @staticmethod
-    def split_escaped(string_to_split, delim=","):
-        """Splits a string by the specified deliminator excluding escaped
-        deliminators.
+        # Update the server/clients of our new map and populate any other players.
+        if self.game.isclient or self.game.ishost:
+            self.game.add_clients_to_map(self.game.client.client.registry)
+            self.game.client.update_player(self.player1.facing)
 
-        :param string_to_split: The string to split.
-        :param delim: The deliminator to split the string by.
+        # Update the location of the npcs. Doesn't send network data.
+        for npc in self.npcs.values():
+            char_dict = {"tile_pos": npc.tile_pos}
+            networking.update_client(npc, char_dict, self.game)
 
-        :type string_to_split: Str
-        :type delim: Str
+        for npc in self.npcs_off_map.values():
+            char_dict = {"tile_pos": npc.tile_pos}
+            networking.update_client(npc, char_dict, self.game)
+
+    ####################################################
+    #            Pathfinding and Collisions            #
+    ####################################################
+    """
+    eventually refactor pathing/collisions into a more generic class
+    so it doesn't rely on a running game, players, or a screen
+    """
+
+    def add_player(self, player):
+        """ WIP.  Eventually handle players coming and going (for server)
+
+        :param player:
+        :return:
+        """
+        self.player1 = player
+        self.add_entity(player)
+
+    def add_entity(self, entity):
+        """
+
+        :type entity: core.entity.Entity
+        :return:
+        """
+        entity.world = self
+        self.npcs[entity.slug] = entity
+
+    def get_entity(self, slug):
+        """
+
+        :type slug: str
+        :return:
+        """
+        return self.npcs.get(slug)
+
+    def remove_entity(self, slug):
+        """
+
+        :type slug: str
+        :return:
+        """
+        del self.npcs[slug]
+
+    def get_all_entities(self):
+        """ List of players and NPCs, for collision checking
+
+        :return:
+        """
+        return self.npcs.values()
+
+    def get_collision_map(self):
+        """ Return dictionary for collision testing
+
+        Returns a dictionary where keys are (x, y) tile tuples
+        and the values are tiles or NPCs.
+
+        # NOTE:
+        This will not respect map changes to collisions
+        after the map has been loaded!
+
+        :rtype: dict
+        :returns: A dictionary of collision tiles
+        """
+        # TODO: overlapping tiles/objects by returning a list
+        collision_dict = dict()
+
+        # Get all the NPCs' tile positions
+        for npc in self.get_all_entities():
+            pos = nearest(npc.tile_pos)
+            collision_dict[pos] = {"entity": npc}
+
+        # tile layout takes precedence
+        collision_dict.update(self.collision_map)
+
+        return collision_dict
+
+    def pathfind(self, start, dest):
+        """ Pathfind
+
+        :param start:
+        :type dest: tuple
+
+        :return:
+        """
+        pathnode = self.pathfind_r(
+            dest,
+            [PathfindNode(start)],
+            set(),
+        )
+
+        if pathnode:
+            # traverse the node to get the path
+            path = []
+            while pathnode:
+                path.append(pathnode.get_value())
+                pathnode = pathnode.get_parent()
+
+            return path[:-1]
+
+        else:
+            # TODO: get current map name for a more useful error
+            logger.error("Pathfinding failed to find a path from " +
+                         str(start) + " to " + str(dest) +
+                         ". Are you sure that an obstacle-free path exists?")
+
+    def pathfind_r(self, dest, queue, known_nodes):
+        """ Breadth first search algorithm
+
+        :type dest: tuple
+        :type queue: list
+        :type known_nodes: set
+
+        :rtype: list
+        """
+        # The collisions shouldn't have changed whilst we were calculating,
+        # so it saves time to reuse the map.
+        collision_map = self.get_collision_map()
+        while queue:
+            node = queue.pop(0)
+            if node.get_value() == dest:
+                return node
+            else:
+                for adj_pos in self.get_exits(node.get_value(), collision_map, known_nodes):
+                    new_node = PathfindNode(adj_pos, node)
+                    known_nodes.add(new_node.get_value())
+                    queue.append(new_node)
+
+    def get_explicit_tile_exits(self, position, tile, skip_nodes):
+        """ Check for exits from tile which are defined in the map
+
+        This will return exits which were defined by the map creator
+
+        Checks "continue" and "exits" properties of the tile
+
+        :param position: tuple
+        :param tile:
+        :param skip_nodes: set
+        :return: list
+        """
+        # Check if the players current position has any exit limitations.
+        # this check is for tiles which define the only way to exit.
+        # for instance, one-way tiles.
+
+        # does the tile define continue movements?
+        try:
+            return [tuple(dirs2[tile['continue']] + position)]
+        except KeyError:
+            pass
+
+        # does the tile explicitly define exits?
+        try:
+            adjacent_tiles = list()
+            for direction in tile["exit"]:
+                exit_tile = tuple(dirs2[direction] + position)
+                if exit_tile in skip_nodes:
+                    continue
+
+                adjacent_tiles.append(exit_tile)
+            return adjacent_tiles
+        except KeyError:
+            pass
+
+    def get_exits(self, position, collision_map=None, skip_nodes=None):
+        """ Return list of tiles which can be moved into
+
+        This checks for adjacent tiles while checking for walls,
+        npcs, and collision lines, one-way tiles, etc
+
+        :param position: tuple
+        :param collision_map: dict
+        :param skip_nodes: set
+
+        :rtype: list
+        """
+        # get tile-level and npc/entity blockers
+        if collision_map is None:
+            collision_map = self.get_collision_map()
+
+        if skip_nodes is None:
+            skip_nodes = set()
+
+        # if there are explicit way to exit this position use that
+        # information only and do not check surrounding tiles.
+        # handles 'continue' and 'exits'
+        tile_data = collision_map.get(position)
+        if tile_data:
+            exits = self.get_explicit_tile_exits(position, tile_data, skip_nodes)
+            if exits:
+                return exits
+
+        # get exits by checking surrounding tiles
+        adjacent_tiles = list()
+        for direction, neighbor in (
+                ("down", (position[0], position[1] + 1)),
+                ("right", (position[0] + 1, position[1])),
+                ("up", (position[0], position[1] - 1)),
+                ("left", (position[0] - 1, position[1])),
+        ):
+            if neighbor in skip_nodes:
+                continue
+
+            # We only need to check the perimeter,
+            # as there is no way to get further out of bounds
+            if position[0] in self.invalid_x or position[1] in self.invalid_y:
+                continue
+
+            # check to see if this tile is separated by a wall
+            if (position, direction) in self.collision_lines_map:
+                # there is a wall so stop checking this direction
+                continue
+
+            # test if this tile has special movement handling
+            # NOTE: Do not refact. into a dict.get(xxxxx, None) style check
+            # NOTE: None has special meaning in this check
+            try:
+                tile_data = collision_map[neighbor]
+            except KeyError:
+                pass
+            else:
+                # None means tile is blocked with no specific data
+                if tile_data is None:
+                    continue
+
+                try:
+                    if pairs[direction] not in tile_data['enter']:
+                        continue
+                except KeyError:
+                    continue
+
+            # no tile data, so assume it is free to move into
+            adjacent_tiles.append(neighbor)
+
+        return adjacent_tiles
+
+    def get_pos_from_tilepos(self, tile_position):
+        """ Returns the map pixel coordinate based on tile position.
+
+        USE this to draw to the screen
+
+        :param tile_position: An [x, y] tile position.
+
+        :type tile_position: List
 
         :rtype: List
-        :returns: A list of the splitted string.
-
+        :returns: The pixel coordinates to draw at the given tile position.
         """
-        # Split by "," unless it is escaped by a "\"
-        split_list = re.split(r'(?<!\\)' + delim, string_to_split)
+        cx, cy = self.current_map.renderer.get_center_offset()
+        px, py = self.project(tile_position)
+        x = px + cx
+        y = py + cy
+        return x, y
 
-        # Remove the escape character from the split list
-        split_list = [w.replace('\,', ',') for w in split_list]
+    def move_npcs(self, time_delta):
+        """ Move NPCs and Players around according to their state
 
-        # strip whitespace around each
-        split_list = [i.strip() for i in split_list]
+        :type time_delta: float
+        :return:
+        """
+        # TODO: This function may be moved to a server
+        # Draw any game NPC's
+        for entity in self.get_all_entities():
+            entity.move(time_delta)
 
-        return split_list
+            if entity.update_location:
+                char_dict = {"tile_pos": entity.final_move_dest}
+                networking.update_client(entity, char_dict, self.game)
+                entity.update_location = False
+
+        # Move any multiplayer characters that are off map so we know where they should be when we change maps.
+        for entity in self.npcs_off_map.values():
+            entity.move(time_delta, self)
+
+    def _collision_box_to_pgrect(self, box):
+        """Returns a pygame.Rect (in screen-coords) version of a collision box (in world-coords).
+        """
+
+        # For readability
+        x, y = self.get_pos_from_tilepos(box)
+        tw, th = self.tile_size
+
+        return pygame.Rect(x, y, tw, th)
+
+    def _npc_to_pgrect(self, npc):
+        """Returns a pygame.Rect (in screen-coords) version of an NPC's bounding box.
+        """
+        pos = self.get_pos_from_tilepos(npc.tile_pos)
+        return pygame.Rect(pos, self.tile_size)
+
+    def load_map(self, map_name):
+        """ Returns map data as a dictionary to be used for map changing and preloading
+        """
+        map_data = {}
+        map_data["data"] = Map(map_name)
+        map_data["events"] = map_data["data"].events
+        map_data["inits"] = map_data["data"].inits
+        map_data["interacts"] = map_data["data"].interacts
+        map_data["collision_map"]
+        map_data["collision_lines_map"]
+        map_data["map_size"] = \
+            map_data["data"].loadfile()

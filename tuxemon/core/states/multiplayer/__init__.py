@@ -41,7 +41,7 @@ from tuxemon.core.states import world
 logger = logging.getLogger(__name__)
 
 
-class HeadlessServerState(world.WorldState):
+class HeadlessServerState(world.MapEnvironment):
     """ The state responsible for the headless server world state.
     """
 

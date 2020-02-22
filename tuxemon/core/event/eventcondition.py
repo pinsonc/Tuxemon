@@ -31,6 +31,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from tuxemon.core.tools import split_escaped
+
 
 class EventCondition(object):
     """
@@ -40,6 +42,15 @@ class EventCondition(object):
 
     def __init__(self):
         pass
+
+    @classmethod
+    def from_string(cls, text):
+        operator, cond_type = words[0:2]
+        if len(words) > 2:
+            args = split_escaped(words[2])
+        else:
+            args = list()
+            return cls()
 
     def test(self, game, condition):
         """ Return True if satisfied, or False if not
@@ -70,3 +81,4 @@ class EventCondition(object):
     @property
     def done(self):
         return True
+

@@ -35,18 +35,16 @@ from __future__ import unicode_literals
 import itertools
 import logging
 
-import pyscroll
 import pygame
 from six.moves import map as imap
 
 from tuxemon.core import prepare, state
 from tuxemon.core import networking
-from tuxemon.core.map import PathfindNode, Map, dirs2, pairs
+from tuxemon.core.map_loader import PathfindNode, Map, dirs2, pairs
 from tuxemon.core.platform.const import buttons, events, intentions
 from tuxemon.core.tools import nearest
 
 logger = logging.getLogger(__name__)
-
 
 direction_map = {
     intentions.UP: "up",
@@ -167,71 +165,6 @@ class WorldState(state.State):
         self.lock_controls()
         self.stop_player()
 
-    def load_sprites(self):
-        """ Load sprite graphics
-
-        :return:
-        """
-        # TODO: refactor animations into renderer
-        # Get all of the player's standing animation images.
-        self.standing = {}
-        for standing_type in facing:
-            filename = "{}_{}.png".format(self.sprite_name, standing_type)
-            path = os.path.join("sprites", filename)
-            self.standing[standing_type] = load_and_scale(path)
-
-        self.playerWidth, self.playerHeight = self.standing["front"].get_size()  # The player's sprite size in pixels
-
-        # avoid cutoff frames when steps don't line up with tile movement
-        frames = 3
-        frame_duration = (1000 / CONFIG.player_walkrate) / frames / 1000 * 2
-
-        # Load all of the player's sprite animations
-        anim_types = ['front_walk', 'back_walk', 'left_walk', 'right_walk']
-        for anim_type in anim_types:
-            images = [
-                'sprites/%s_%s.%s.png' % (
-                    self.sprite_name,
-                    anim_type,
-                    str(num).rjust(3, str('0'))
-                )
-                for num in range(4)
-            ]
-
-            frames = []
-            for image in images:
-                surface = load_and_scale(image)
-                frames.append((surface, frame_duration))
-
-            self.sprite[anim_type] = pyganim.PygAnimation(frames, loop=True)
-
-        # Have the animation objects managed by a conductor.
-        # With the conductor, we can call play() and stop() on all the animation objects
-        # at the same time, so that way they'll always be in sync with each other.
-        self.moveConductor.add(self.sprite)
-
-    def get_sprites(self):
-        """ Get the surfaces and layers for the sprite
-
-        Used to render the player
-
-        :return:
-        """
-
-        def get_frame(d, ani):
-            frame = d[ani]
-            try:
-                surface = frame.getCurrentFrame()
-                frame.rate = self.moverate / CONFIG.player_walkrate
-                return surface
-            except AttributeError:
-                return frame
-
-        # TODO: move out to the world renderer
-        frame_dict = self.sprite if self.moving else self.standing
-        state = animation_mapping[self.moving][self.facing]
-        return [(get_frame(frame_dict, state), self.tile_pos, 2)]
-
     def fade_and_teleport(self, duration=2):
         """ Fade out, teleport, fade in
 
@@ -342,7 +275,7 @@ class WorldState(state.State):
         :returns: None
 
         """
-        super(WorldState, self).update(time_delta)
+        super(MapEnvironment, self).update(time_delta)
         self.move_npcs(time_delta)
         logger.debug("*** Game Loop Started ***")
         logger.debug("Player Variables:" + str(self.player1.game_variables))
@@ -798,41 +731,6 @@ class WorldState(state.State):
         """
         pos = self.get_pos_from_tilepos(npc.tile_pos)
         return pygame.Rect(pos, self.tile_size)
-
-    ####################################################
-    #                Debug Drawing                     #
-    ####################################################
-    def debug_drawing(self, surface):
-        from pygame.gfxdraw import box
-
-        surface.lock()
-
-        # draw events
-        for event in self.game.events:
-            topleft = self.get_pos_from_tilepos((event.x, event.y))
-            size = self.project((event.w, event.h))
-            rect = topleft, size
-            box(surface, rect, (0, 255, 0, 128))
-
-        # We need to iterate over all collidable objects.  So, let's start
-        # with the walls/collision boxes.
-        box_iter = imap(self._collision_box_to_pgrect, self.collision_map)
-
-        # Next, deal with solid NPCs.
-        npc_iter = imap(self._npc_to_pgrect, self.npcs.values())
-
-        # draw noc and wall collision tiles
-        red = (255, 0, 0, 128)
-        for item in itertools.chain(box_iter, npc_iter):
-            box(surface, item, red)
-
-        # draw center lines to verify camera is correct
-        w, h = surface.get_size()
-        cx, cy = w // 2, h // 2
-        pygame.draw.line(surface, (255, 50, 50), (cx, 0), (cx, h))
-        pygame.draw.line(surface, (255, 50, 50), (0, cy), (w, cy))
-
-        surface.unlock()
 
     def midscreen_animations(self, surface):
         """Handles midscreen animations that will be drawn UNDER menus and dialog.

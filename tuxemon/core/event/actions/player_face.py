@@ -26,7 +26,7 @@ from __future__ import unicode_literals
 
 from tuxemon.core.event import get_npc
 from tuxemon.core.event.eventaction import EventAction
-from tuxemon.core.map import dirs2, get_direction
+from tuxemon.core.map_loader import dirs2, get_direction
 
 
 class PlayerFaceAction(EventAction):

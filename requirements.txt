@@ -1,6 +1,7 @@
 babel
 cbor
 lxml>=4.2.5
+natsort
 neteria
 pillow
 pygame>=1.9.6
