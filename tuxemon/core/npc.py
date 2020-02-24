@@ -234,7 +234,7 @@ class NPC(Entity):
 
         :return: None
         """
-        self.network_notify_stop_moving()
+        # self.network_notify_stop_moving()
         self.velocity3.x = 0
         self.velocity3.y = 0
         self.velocity3.z = 0
@@ -435,30 +435,30 @@ class NPC(Entity):
         :return:
         """
         self.tile_pos = proj(self.position3)
-        self.network_notify_location_change()
+        # self.network_notify_location_change()
 
-    def network_notify_start_moving(self, direction):
-        """ WIP guesswork ¯\_(ツ)_/¯
-
-        :return:
-        """
-        if self.world.game.isclient or self.world.game.ishost:
-            self.world.game.client.update_player(direction, event_type="CLIENT_MOVE_START")
-
-    def network_notify_stop_moving(self):
-        """ WIP guesswork ¯\_(ツ)_/¯
-
-        :return:
-        """
-        if self.world.game.isclient or self.world.game.ishost:
-            self.world.game.client.update_player(self.facing, event_type="CLIENT_MOVE_COMPLETE")
-
-    def network_notify_location_change(self):
-        """ WIP guesswork ¯\_(ツ)_/¯
-
-        :return:
-        """
-        self.update_location = True
+    # def network_notify_start_moving(self, direction):
+    #     """ WIP guesswork ¯\_(ツ)_/¯
+    #
+    #     :return:
+    #     """
+    #     if self.world.game.isclient or self.world.game.ishost:
+    #         self.world.game.client.update_player(direction, event_type="CLIENT_MOVE_START")
+    #
+    # def network_notify_stop_moving(self):
+    #     """ WIP guesswork ¯\_(ツ)_/¯
+    #
+    #     :return:
+    #     """
+    #     if self.world.game.isclient or self.world.game.ishost:
+    #         self.world.game.client.update_player(self.facing, event_type="CLIENT_MOVE_COMPLETE")
+    #
+    # def network_notify_location_change(self):
+    #     """ WIP guesswork ¯\_(ツ)_/¯
+    #
+    #     :return:
+    #     """
+    #     self.update_location = True
 
     ####################################################
     #                   Monsters                       #

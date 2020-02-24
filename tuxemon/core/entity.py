@@ -48,6 +48,7 @@ class Entity(object):
         self.acceleration3 = Vector3(0, 0, 0)  # not used currently, just set velocity
         self.velocity3 = Vector3(0, 0, 0)
         self.update_location = False
+        self.map = None  # name of the map where entity is
 
     # === PHYSICS START ================================================================
     def stop_moving(self):

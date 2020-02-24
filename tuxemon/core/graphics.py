@@ -13,6 +13,8 @@ import operator
 import re
 
 import pygame
+from pytmx.util_pygame import smart_convert, handle_transformation
+
 from tuxemon.compat import Rect
 from tuxemon.core import prepare
 from tuxemon.core.tools import transform_resource_filename, scale_sequence, scale_rect, logger
@@ -66,22 +68,22 @@ def load_and_scale(filename):
     return scale_surface(load_image(filename), prepare.SCALE)
 
 
-def smart_convert(image):
-    """ Given an unconverted file, determine if it has transparent pixels
-    and return a converted image, with per-pixel alpha if needed.
-
-    :param image: pygame.Surface
-    :rtype: pygame.Surface
-    """
-    # get number of opaque pixels in the image
-    px = pygame.mask.from_surface(image, 127).count()
-
-    # there are no transparent pixels in the image because
-    # the number of pixels matches the number of opaque pixels
-    if px == operator.mul(*image.get_size()):
-        return image.convert()
-
-    return image.convert_alpha()
+# def smart_convert(image):
+#     """ Given an unconverted file, determine if it has transparent pixels
+#     and return a converted image, with per-pixel alpha if needed.
+#
+#     :param image: pygame.Surface
+#     :rtype: pygame.Surface
+#     """
+#     # get number of opaque pixels in the image
+#     px = pygame.mask.from_surface(image, 127).count()
+#
+#     # there are no transparent pixels in the image because
+#     # the number of pixels matches the number of opaque pixels
+#     if px == operator.mul(*image.get_size()):
+#         return image.convert()
+#
+#     return image.convert_alpha()
 
 
 def load_image(filename):
@@ -98,7 +100,7 @@ def load_image(filename):
     :rtype: pygame.Surface
     """
     filename = transform_resource_filename(filename)
-    return smart_convert(pygame.image.load(filename))
+    return smart_convert(pygame.image.load(filename), None, True)
 
 
 def load_sprite(filename, **rect_kwargs):
@@ -239,8 +241,6 @@ def scaled_image_loader(filename, colorkey, **kwargs):
     :param kwargs:
     :return:
     """
-    from pytmx.util_pygame import smart_convert, handle_transformation
-
     if colorkey:
         colorkey = pygame.Color('#{0}'.format(colorkey))
 

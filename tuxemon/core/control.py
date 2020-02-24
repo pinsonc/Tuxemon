@@ -43,8 +43,10 @@ logger = logging.getLogger(__name__)
 
 
 class Control(StateManager):
-    """ Control class for entire project. Contains the game loop, and contains
-    the event_loop which passes events to States as needed.
+    """
+
+    Contains game loop and event handling
+
     """
 
     def __init__(self, caption):
@@ -55,6 +57,7 @@ class Control(StateManager):
         """
         # Set up our game's configuration from the prepare module.
         self.config = prepare.CONFIG
+        self.world = None
 
         self.init_platform()
 
@@ -130,20 +133,6 @@ class Control(StateManager):
 
         self.input_manager = PygameEventQueueHandler()
         self.screen = pygame.display.get_surface()
-
-    def add_player(self, player):
-        """ Add a player to the game
-
-        Only one human player is supported ATM
-
-        :type player: core.player.Player
-        :return:
-        """
-        # TODO: moar players
-        self.player1 = player
-
-    def get_player(self):
-        return self.player1
 
     def process_events(self, events):
         """ Process all events for this frame.
@@ -372,7 +361,6 @@ class Control(StateManager):
             return
 
         world.npcs = {}
-        world.npcs_off_map = {}
         for client in registry:
             if "sprite" in registry[client]:
                 sprite = registry[client]["sprite"]
@@ -383,13 +371,9 @@ class Control(StateManager):
                 if client_map == current_map:
                     if sprite.slug not in world.npcs:
                         world.npcs[sprite.slug] = sprite
-                    if sprite.slug in world.npcs_off_map:
-                        del world.npcs_off_map[sprite.slug]
 
                 # Remove player from the map if they have changed maps.
                 elif client_map != current_map:
-                    if sprite.slug not in world.npcs_off_map:
-                        world.npcs_off_map[sprite.slug] = sprite
                     if sprite.slug in world.npcs:
                         del world.npcs[sprite]
 
@@ -421,6 +405,24 @@ class Control(StateManager):
             if state.__class__.__name__ == name:
                 return state
         return None
+
+    def broadcast_player_teleport_change(self):
+        """ Tell clients/host that player has moved or changed map after teleport
+
+        :return:
+        """
+        # Set the transition variable in event_data to false when we're done
+        self.game.event_data["transition"] = False
+
+        # Update the server/clients of our new map and populate any other players.
+        if self.game.isclient or self.game.ishost:
+            self.game.add_clients_to_map(self.game.client.client.registry)
+            self.game.client.update_player(self.player1.facing)
+
+        # Update the location of the npcs. Doesn't send network data.
+        for npc in self.npcs.values():
+            char_dict = {"tile_pos": npc.tile_pos}
+            networking.update_client(npc, char_dict, self.game)
 
 
 class HeadlessControl(Control, StateManager):

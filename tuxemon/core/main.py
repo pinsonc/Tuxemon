@@ -36,6 +36,7 @@ import logging
 from tuxemon.core import prepare
 from tuxemon.core import log
 from tuxemon.core.player import Player
+from tuxemon.core.world import World
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +60,6 @@ def main(load_slot=None):
     # global/singleton hack for now
     setattr(prepare, "GLOBAL_CONTROL", control)
 
-    # load the player npc
-    new_player = Player(prepare.CONFIG.player_npc)
-    control.add_player(new_player)
-
     # background state is used to prevent other states from
     # being required to track dirty screen areas.  for example,
     # in the start state, there is a menu on a blank background,
@@ -72,14 +69,20 @@ def main(load_slot=None):
     control.push_state("BackgroundState")
 
     # basically the main menu
-    control.push_state("StartState")
+    # control.push_state("StartState")
 
-    if load_slot:
-        control.push_state("LoadMenuState", load_slot=load_slot)
-    elif prepare.CONFIG.splash:
-        # Show the splash screen if it is enabled in the game configuration
-        control.push_state("SplashState")
-        control.push_state("FadeInTransition")
+    player = Player(prepare.CONFIG.player_npc)
+    world = World()
+    world.add_entity(player)
+    state = control.push_state("WorldState", world=world)
+    state.set_player_npc(player)
+
+    # if load_slot:
+    #     control.push_state("LoadMenuState", load_slot=load_slot)
+    # elif prepare.CONFIG.splash:
+    #     # Show the splash screen if it is enabled in the game configuration
+    #     control.push_state("SplashState")
+    #     control.push_state("FadeInTransition")
 
     # block of code useful for testing
     if prepare.CONFIG.collision_map:

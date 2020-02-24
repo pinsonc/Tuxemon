@@ -1,4 +1,4 @@
-from tuxemon.core.euclid import Point2, Vector3, Point3, Vector2
+from tuxemon.core.euclid import Point2, Vector3, Vector2
 
 # direction => vector
 dirs3 = {
@@ -105,20 +105,6 @@ class PathfindNode(object):
         return s
 
 
-class Tile(object):
-    """A class to create tile objects. Tile objects are used to keep track of tile properties such
-    as the layer it's on, its position, surface, and other properties.
-
-    """
-
-    def __init__(self, name, surface, tileset):
-        self.name = name
-        self.surface = surface
-        self.layer = None
-        self.type = None
-        self.tileset = tileset
-
-
 class Map(object):
     """
     needs new name.  this handles the entities, actions and map of a single map
@@ -141,77 +127,9 @@ class Map(object):
         # example: ((5,4),(5,3), both)
         self.collision_lines_map = dict()
 
-    def broadcast_player_teleport_change(self):
-        """ Tell clients/host that player has moved or changed map after teleport
-
-        :return:
-        """
-        # Set the transition variable in event_data to false when we're done
-        self.game.event_data["transition"] = False
-
-        # Update the server/clients of our new map and populate any other players.
-        if self.game.isclient or self.game.ishost:
-            self.game.add_clients_to_map(self.game.client.client.registry)
-            self.game.client.update_player(self.player1.facing)
-
-        # Update the location of the npcs. Doesn't send network data.
-        for npc in self.npcs.values():
-            char_dict = {"tile_pos": npc.tile_pos}
-            networking.update_client(npc, char_dict, self.game)
-
-        for npc in self.npcs_off_map.values():
-            char_dict = {"tile_pos": npc.tile_pos}
-            networking.update_client(npc, char_dict, self.game)
-
     ####################################################
     #            Pathfinding and Collisions            #
     ####################################################
-    """
-    eventually refactor pathing/collisions into a more generic class
-    so it doesn't rely on a running game, players, or a screen
-    """
-
-    def add_player(self, player):
-        """ WIP.  Eventually handle players coming and going (for server)
-
-        :param player:
-        :return:
-        """
-        self.player1 = player
-        self.add_entity(player)
-
-    def add_entity(self, entity):
-        """
-
-        :type entity: core.entity.Entity
-        :return:
-        """
-        entity.world = self
-        self.npcs[entity.slug] = entity
-
-    def get_entity(self, slug):
-        """
-
-        :type slug: str
-        :return:
-        """
-        return self.npcs.get(slug)
-
-    def remove_entity(self, slug):
-        """
-
-        :type slug: str
-        :return:
-        """
-        del self.npcs[slug]
-
-    def get_all_entities(self):
-        """ List of players and NPCs, for collision checking
-
-        :return:
-        """
-        return self.npcs.values()
-
     def get_collision_map(self):
         """ Return dictionary for collision testing
 
@@ -414,26 +332,6 @@ class Map(object):
         y = py + cy
         return x, y
 
-    def move_npcs(self, time_delta):
-        """ Move NPCs and Players around according to their state
-
-        :type time_delta: float
-        :return:
-        """
-        # TODO: This function may be moved to a server
-        # Draw any game NPC's
-        for entity in self.get_all_entities():
-            entity.move(time_delta)
-
-            if entity.update_location:
-                char_dict = {"tile_pos": entity.final_move_dest}
-                networking.update_client(entity, char_dict, self.game)
-                entity.update_location = False
-
-        # Move any multiplayer characters that are off map so we know where they should be when we change maps.
-        for entity in self.npcs_off_map.values():
-            entity.move(time_delta, self)
-
     def _collision_box_to_pgrect(self, box):
         """Returns a pygame.Rect (in screen-coords) version of a collision box (in world-coords).
         """
@@ -450,15 +348,3 @@ class Map(object):
         pos = self.get_pos_from_tilepos(npc.tile_pos)
         return pygame.Rect(pos, self.tile_size)
 
-    def load_map(self, map_name):
-        """ Returns map data as a dictionary to be used for map changing and preloading
-        """
-        map_data = {}
-        map_data["data"] = Map(map_name)
-        map_data["events"] = map_data["data"].events
-        map_data["inits"] = map_data["data"].inits
-        map_data["interacts"] = map_data["data"].interacts
-        map_data["collision_map"]
-        map_data["collision_lines_map"]
-        map_data["map_size"] = \
-            map_data["data"].loadfile()

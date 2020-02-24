@@ -74,15 +74,6 @@ class TeleportAction(EventAction):
             world.delayed_y = self.parameters.y
 
         else:
-            # If we're not doing a transition, then just do the teleport
-            map_path = prepare.fetch("maps", map_name)
-
-            if world.current_map is None:
-                world.change_map(map_path)
-
-            elif map_path != world.current_map.filename:
-                world.change_map(map_path)
-
             # Stop the player's movement so they don't continue their move after they teleported.
             player.cancel_path()
 

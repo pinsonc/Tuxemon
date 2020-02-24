@@ -38,8 +38,9 @@ import pygame
 
 from tuxemon.core import networking
 from tuxemon.core import prepare, state
-from tuxemon.core.map import PathfindNode, Map, dirs2, pairs
+from tuxemon.core.map_view import MapView
 from tuxemon.core.platform.const import buttons, events, intentions
+from tuxemon.core.platform.events import PlayerInput
 from tuxemon.core.tools import nearest
 
 logger = logging.getLogger(__name__)
@@ -69,30 +70,17 @@ class WorldState(state.State):
         buttons.BACK: intentions.WORLD_MENU,
     }
 
-    def startup(self):
-        # Provide access to the screen surface
-        self.screen = self.game.screen
-        self.screen_rect = self.screen.get_rect()
-        self.resolution = prepare.SCREEN_SIZE
-        self.tile_size = prepare.TILE_SIZE
+    def __init__(self, *args, **kwargs):
+        super(WorldState, self).__init__(*args, **kwargs)
+        self.player_npc = None
+        self.allow_player_movement = None
+        self.wants_to_move_player = None
 
-        #####################################################################
-        #                           Player Details                           #
-        ######################################################################
-
-        self.npcs = {}
-        self.npcs_off_map = {}
-        self.player1 = None
+    def startup(self, *args, **kwargs):
+        self.world = kwargs["world"]
+        self.player_npc = None
         self.wants_to_move_player = None
         self.allow_player_movement = True
-
-        ######################################################################
-        #                              Map                                   #
-        ######################################################################
-
-        # Keep a map of preloaded maps for fast map switching.
-        self.preloaded_maps = {}
-        self.current_map = None
 
         ######################################################################
         #                            Transitions                             #
@@ -112,45 +100,10 @@ class WorldState(state.State):
         # the middle of a transition.
         self.delayed_facing = None
 
-        ######################################################################
-        #                       Fullscreen Animations                        #
-        ######################################################################
-
-        # The cinema bars are used for cinematic moments.
-        # The cinema state can be: "off", "on", "turning on" or "turning off"
-        self.cinema_state = "off"
-        self.cinema_speed = 15 * prepare.SCALE  # Pixels per second speed of the animation.
-
-        self.cinema_top = {}
-        self.cinema_bottom = {}
-
-        # Create a surface that we'll use as black bars for a cinematic
-        # experience
-        self.cinema_top['surface'] = pygame.Surface(
-            (self.resolution[0], self.resolution[1] / 6))
-        self.cinema_bottom['surface'] = pygame.Surface(
-            (self.resolution[0], self.resolution[1] / 6))
-
-        # Fill our empty surface with black
-        self.cinema_top['surface'].fill((0, 0, 0))
-        self.cinema_bottom['surface'].fill((0, 0, 0))
-
-        # When cinema mode is off, this will be the position we'll draw the
-        # black bar.
-        self.cinema_top['off_position'] = [
-            0, -self.cinema_top['surface'].get_height()]
-        self.cinema_bottom['off_position'] = [0, self.resolution[1]]
-        self.cinema_top['position'] = list(self.cinema_top['off_position'])
-        self.cinema_bottom['position'] = list(
-            self.cinema_bottom['off_position'])
-
-        # When cinema mode is ON, this will be the position we'll draw the
-        # black bar.
-        self.cinema_top['on_position'] = [0, 0]
-        self.cinema_bottom['on_position'] = [
-            0, self.resolution[1] - self.cinema_bottom['surface'].get_height()]
-
-        self.map_animations = dict()
+        map_name = "bedroom_test.tmx"
+        map_path = prepare.fetch("maps", map_name)
+        map_data = MapView.load(map_path)
+        self.view = MapView(None, self.world, map_data)
 
     def resume(self):
         """ Called after returning focus to this state
@@ -162,6 +115,15 @@ class WorldState(state.State):
         """
         self.lock_controls()
         self.stop_player()
+
+    def set_player_npc(self, entity):
+        """ Set the npc which is controlled
+
+        :param entity:
+        :return:
+        """
+        self.player_npc = entity
+        self.view.set_tracked_npc(entity)
 
     def fade_and_teleport(self, duration=2):
         """ Fade out, teleport, fade in
@@ -225,13 +187,12 @@ class WorldState(state.State):
             # check if map has changed, and if so, change it
             map_name = prepare.fetch("maps", self.delayed_mapname)
 
-            if map_name != self.current_map.filename:
-                self.change_map(map_name)
+            # TODO: change player map
 
-            self.player1.set_position((self.delayed_x, self.delayed_y))
+            self.player_npc.set_position((self.delayed_x, self.delayed_y))
 
             if self.delayed_facing:
-                self.player1.facing = self.delayed_facing
+                self.player_npc.facing = self.delayed_facing
                 self.delayed_facing = None
 
             self.delayed_teleport = False
@@ -240,62 +201,21 @@ class WorldState(state.State):
         self.transition_surface = pygame.Surface(self.game.screen.get_size())
         self.transition_surface.fill(color)
 
-    def broadcast_player_teleport_change(self):
-        """ Tell clients/host that player has moved or changed map after teleport
-
-        :return:
-        """
-        # Set the transition variable in event_data to false when we're done
-        self.game.event_data["transition"] = False
-
-        # Update the server/clients of our new map and populate any other players.
-        if self.game.isclient or self.game.ishost:
-            self.game.add_clients_to_map(self.game.client.client.registry)
-            self.game.client.update_player(self.player1.facing)
-
-        # Update the location of the npcs. Doesn't send network data.
-        for npc in self.npcs.values():
-            char_dict = {"tile_pos": npc.tile_pos}
-            networking.update_client(npc, char_dict, self.game)
-
-        for npc in self.npcs_off_map.values():
-            char_dict = {"tile_pos": npc.tile_pos}
-            networking.update_client(npc, char_dict, self.game)
-
-    def update(self, time_delta):
-        """The primary game loop that executes the world's game functions every frame.
-
-        :param time_delta: Amount of time passed since last frame.
-
-        :type time_delta: Float
-
-        :rtype: None
-        :returns: None
-
-        """
-        super(MapEnvironment, self).update(time_delta)
-        self.move_npcs(time_delta)
-        logger.debug("*** Game Loop Started ***")
-        logger.debug("Player Variables:" + str(self.player1.game_variables))
-
     def draw(self, surface):
         """ Draw the game world to the screen
 
         :param surface:
         :return:
         """
-        self.screen = surface
-        self.map_drawing(surface)
+        self.view.draw(None, surface)
         self.fullscreen_animations(surface)
 
     def translate_input_event(self, event):
-        """
+        """ Translate a key to a game input
 
         :type event: tuxemon.core.input.events.PlayerInput
         :rtype: tuxemon.core.input.events.PlayerInput
         """
-        from tuxemon.core.platform.events import PlayerInput
-
         try:
             return PlayerInput(self.keymap[event.button], event.value, event.hold_time)
         except KeyError:
@@ -331,7 +251,7 @@ class WorldState(state.State):
                 return
 
         # map may not have a player registered
-        if self.player1 is None:
+        if self.player_npc is None:
             return
 
         if event.button == intentions.INTERACT:
@@ -343,9 +263,9 @@ class WorldState(state.State):
 
         if event.button == intentions.RUN:
             if event.held:
-                self.player1.moverate = self.game.config.player_runrate
+                self.player_npc.moverate = self.game.config.player_runrate
             else:
-                self.player1.moverate = self.game.config.player_walkrate
+                self.player_npc.moverate = self.game.config.player_walkrate
 
         # If we receive an arrow key press, set the facing and
         # moving direction to that direction
@@ -363,263 +283,12 @@ class WorldState(state.State):
 
         if prepare.DEV_TOOLS:
             if event.pressed and event.button == intentions.NOCLIP:
-                self.player1.ignore_collisions = not self.player1.ignore_collisions
+                self.player_npc.ignore_collisions = not self.player_npc.ignore_collisions
                 return
 
         # if we made it this far, return the event for others to use
         return event
 
-    ####################################################
-    #                   Map Drawing                    #
-    ####################################################
-    def map_drawing(self, surface):
-        """Draws the map tiles in a layered order.
-
-        :param: None
-
-        :rtype: None
-        :returns: None
-
-        """
-        # TODO: draw widgets, which includes the map view
-        pass
-
-    ####################################################
-    #            Pathfinding and Collisions            #
-    ####################################################
-    """
-    eventually refactor pathing/collisions into a more generic class
-    so it doesn't rely on a running game, players, or a screen
-    """
-
-    def add_player(self, player):
-        """ WIP.  Eventually handle players coming and going (for server)
-
-        :param player:
-        :return:
-        """
-        self.player1 = player
-        self.add_entity(player)
-
-    def add_entity(self, entity):
-        """
-
-        :type entity: core.entity.Entity
-        :return:
-        """
-        entity.world = self
-        self.npcs[entity.slug] = entity
-
-    def get_entity(self, slug):
-        """
-
-        :type slug: str
-        :return:
-        """
-        return self.npcs.get(slug)
-
-    def remove_entity(self, slug):
-        """
-
-        :type slug: str
-        :return:
-        """
-        del self.npcs[slug]
-
-    def get_all_entities(self):
-        """ List of players and NPCs, for collision checking
-
-        :return:
-        """
-        return self.npcs.values()
-
-    def get_collision_map(self):
-        """ Return dictionary for collision testing
-
-        Returns a dictionary where keys are (x, y) tile tuples
-        and the values are tiles or NPCs.
-
-        # NOTE:
-        This will not respect map changes to collisions
-        after the map has been loaded!
-
-        :rtype: dict
-        :returns: A dictionary of collision tiles
-        """
-        # TODO: overlapping tiles/objects by returning a list
-        collision_dict = dict()
-
-        # Get all the NPCs' tile positions
-        for npc in self.get_all_entities():
-            pos = nearest(npc.tile_pos)
-            collision_dict[pos] = {"entity": npc}
-
-        # tile layout takes precedence
-        collision_dict.update(self.collision_map)
-
-        return collision_dict
-
-    def pathfind(self, start, dest):
-        """ Pathfind
-
-        :param start:
-        :type dest: tuple
-
-        :return:
-        """
-        pathnode = self.pathfind_r(
-            dest,
-            [PathfindNode(start)],
-            set(),
-        )
-
-        if pathnode:
-            # traverse the node to get the path
-            path = []
-            while pathnode:
-                path.append(pathnode.get_value())
-                pathnode = pathnode.get_parent()
-
-            return path[:-1]
-
-        else:
-            # TODO: get current map name for a more useful error
-            logger.error("Pathfinding failed to find a path from " +
-                         str(start) + " to " + str(dest) +
-                         ". Are you sure that an obstacle-free path exists?")
-
-    def pathfind_r(self, dest, queue, known_nodes):
-        """ Breadth first search algorithm
-
-        :type dest: tuple
-        :type queue: list
-        :type known_nodes: set
-
-        :rtype: list
-        """
-        # The collisions shouldn't have changed whilst we were calculating,
-        # so it saves time to reuse the map.
-        collision_map = self.get_collision_map()
-        while queue:
-            node = queue.pop(0)
-            if node.get_value() == dest:
-                return node
-            else:
-                for adj_pos in self.get_exits(node.get_value(), collision_map, known_nodes):
-                    new_node = PathfindNode(adj_pos, node)
-                    known_nodes.add(new_node.get_value())
-                    queue.append(new_node)
-
-    def get_explicit_tile_exits(self, position, tile, skip_nodes):
-        """ Check for exits from tile which are defined in the map
-
-        This will return exits which were defined by the map creator
-
-        Checks "continue" and "exits" properties of the tile
-
-        :param position: tuple
-        :param tile:
-        :param skip_nodes: set
-        :return: list
-        """
-        # Check if the players current position has any exit limitations.
-        # this check is for tiles which define the only way to exit.
-        # for instance, one-way tiles.
-
-        # does the tile define continue movements?
-        try:
-            return [tuple(dirs2[tile['continue']] + position)]
-        except KeyError:
-            pass
-
-        # does the tile explicitly define exits?
-        try:
-            adjacent_tiles = list()
-            for direction in tile["exit"]:
-                exit_tile = tuple(dirs2[direction] + position)
-                if exit_tile in skip_nodes:
-                    continue
-
-                adjacent_tiles.append(exit_tile)
-            return adjacent_tiles
-        except KeyError:
-            pass
-
-    def get_exits(self, position, collision_map=None, skip_nodes=None):
-        """ Return list of tiles which can be moved into
-
-        This checks for adjacent tiles while checking for walls,
-        npcs, and collision lines, one-way tiles, etc
-
-        :param position: tuple
-        :param collision_map: dict
-        :param skip_nodes: set
-
-        :rtype: list
-        """
-        # get tile-level and npc/entity blockers
-        if collision_map is None:
-            collision_map = self.get_collision_map()
-
-        if skip_nodes is None:
-            skip_nodes = set()
-
-        # if there are explicit way to exit this position use that
-        # information only and do not check surrounding tiles.
-        # handles 'continue' and 'exits'
-        tile_data = collision_map.get(position)
-        if tile_data:
-            exits = self.get_explicit_tile_exits(position, tile_data, skip_nodes)
-            if exits:
-                return exits
-
-        # get exits by checking surrounding tiles
-        adjacent_tiles = list()
-        for direction, neighbor in (
-                ("down", (position[0], position[1] + 1)),
-                ("right", (position[0] + 1, position[1])),
-                ("up", (position[0], position[1] - 1)),
-                ("left", (position[0] - 1, position[1])),
-        ):
-            if neighbor in skip_nodes:
-                continue
-
-            # We only need to check the perimeter,
-            # as there is no way to get further out of bounds
-            if position[0] in self.invalid_x or position[1] in self.invalid_y:
-                continue
-
-            # check to see if this tile is separated by a wall
-            if (position, direction) in self.collision_lines_map:
-                # there is a wall so stop checking this direction
-                continue
-
-            # test if this tile has special movement handling
-            # NOTE: Do not refact. into a dict.get(xxxxx, None) style check
-            # NOTE: None has special meaning in this check
-            try:
-                tile_data = collision_map[neighbor]
-            except KeyError:
-                pass
-            else:
-                # None means tile is blocked with no specific data
-                if tile_data is None:
-                    continue
-
-                try:
-                    if pairs[direction] not in tile_data['enter']:
-                        continue
-                except KeyError:
-                    continue
-
-            # no tile data, so assume it is free to move into
-            adjacent_tiles.append(neighbor)
-
-        return adjacent_tiles
-
-    ####################################################
-    #                Player Movement                   #
-    ####################################################
     def lock_controls(self):
         """ Prevent input from moving the player
 
@@ -642,14 +311,14 @@ class WorldState(state.State):
     def stop_player(self):
         """ Reset controls and stop player movement at once.  Do not lock controls
 
-        Movement is gracefully stopped.  If player was in a movement, then
-        complete it before stopping.
+        If player was in a movement then complete it before stopping.
 
         :return:
         """
         self.wants_to_move_player = None
         self.game.release_controls()
-        self.player1.cancel_movement()
+        if self.player_npc is not None:
+            self.player_npc.cancel_movement()
 
     def stop_and_reset_player(self):
         """ Reset controls, stop player and abort movement.  Do not lock controls.
@@ -663,7 +332,8 @@ class WorldState(state.State):
         """
         self.wants_to_move_player = None
         self.game.release_controls()
-        self.player1.abort_movement()
+        if self.player_npc is not None:
+            self.player_npc.abort_movement()
 
     def move_player(self, direction):
         """ Move player in a direction.  Changes facing.
@@ -671,64 +341,49 @@ class WorldState(state.State):
         :param direction:
         :return:
         """
-        self.player1.move_direction = direction
+        if self.player_npc is not None:
+            self.player_npc.move_direction = direction
 
-    def get_pos_from_tilepos(self, tile_position):
-        """ Returns the map pixel coordinate based on tile position.
+    # Below is the boneyard.  Eventually this should be added back in.
 
-        USE this to draw to the screen
+    def init_cinematics(self):
+        ######################################################################
+        #                       Fullscreen Animations                        #
+        ######################################################################
 
-        :param tile_position: An [x, y] tile position.
+        # The cinema bars are used for cinematic moments.
+        # The cinema state can be: "off", "on", "turning on" or "turning off"
+        self.cinema_state = "off"
+        self.cinema_speed = 15 * prepare.SCALE  # Pixels per second speed of the animation.
 
-        :type tile_position: List
+        self.cinema_top = {}
+        self.cinema_bottom = {}
 
-        :rtype: List
-        :returns: The pixel coordinates to draw at the given tile position.
-        """
-        cx, cy = self.current_map.renderer.get_center_offset()
-        px, py = self.project(tile_position)
-        x = px + cx
-        y = py + cy
-        return x, y
+        # Create a surface that we'll use as black bars for a cinematic
+        # experience
+        self.cinema_top['surface'] = pygame.Surface(
+            (self.resolution[0], self.resolution[1] / 6))
+        self.cinema_bottom['surface'] = pygame.Surface(
+            (self.resolution[0], self.resolution[1] / 6))
 
-    def project(self, position):
-        return position[0] * self.tile_size[0], position[1] * self.tile_size[1]
+        # Fill our empty surface with black
+        self.cinema_top['surface'].fill((0, 0, 0))
+        self.cinema_bottom['surface'].fill((0, 0, 0))
 
-    def move_npcs(self, time_delta):
-        """ Move NPCs and Players around according to their state
+        # When cinema mode is off, this will be the position we'll draw the
+        # black bar.
+        self.cinema_top['off_position'] = [
+            0, -self.cinema_top['surface'].get_height()]
+        self.cinema_bottom['off_position'] = [0, self.resolution[1]]
+        self.cinema_top['position'] = list(self.cinema_top['off_position'])
+        self.cinema_bottom['position'] = list(
+            self.cinema_bottom['off_position'])
 
-        :type time_delta: float
-        :return:
-        """
-        # TODO: This function may be moved to a server
-        # Draw any game NPC's
-        for entity in self.get_all_entities():
-            entity.move(time_delta)
-
-            if entity.update_location:
-                char_dict = {"tile_pos": entity.final_move_dest}
-                networking.update_client(entity, char_dict, self.game)
-                entity.update_location = False
-
-        # Move any multiplayer characters that are off map so we know where they should be when we change maps.
-        for entity in self.npcs_off_map.values():
-            entity.move(time_delta, self)
-
-    def _collision_box_to_pgrect(self, box):
-        """Returns a pygame.Rect (in screen-coords) version of a collision box (in world-coords).
-        """
-
-        # For readability
-        x, y = self.get_pos_from_tilepos(box)
-        tw, th = self.tile_size
-
-        return pygame.Rect(x, y, tw, th)
-
-    def _npc_to_pgrect(self, npc):
-        """Returns a pygame.Rect (in screen-coords) version of an NPC's bounding box.
-        """
-        pos = self.get_pos_from_tilepos(npc.tile_pos)
-        return pygame.Rect(pos, self.tile_size)
+        # When cinema mode is ON, this will be the position we'll draw the
+        # black bar.
+        self.cinema_top['on_position'] = [0, 0]
+        self.cinema_bottom['on_position'] = [
+            0, self.resolution[1] - self.cinema_bottom['surface'].get_height()]
 
     def midscreen_animations(self, surface):
         """Handles midscreen animations that will be drawn UNDER menus and dialog.
@@ -810,79 +465,6 @@ class WorldState(state.State):
             self.transition_surface.set_alpha(self.transition_alpha)
             surface.blit(self.transition_surface, (0, 0))
 
-    ####################################################
-    #             Map Change/Load Functions            #
-    ####################################################
-    def change_map(self, map_name):
-        # Set the currently loaded map. This is needed because the event
-        # engine loads event conditions and event actions from the currently
-        # loaded map. If we change maps, we need to update this.
-        if map_name not in self.preloaded_maps.keys():
-            logger.debug("Map was not preloaded. Loading from disk.")
-            map_data = self.load_map(map_name)
-        else:
-            logger.debug("%s was found in preloaded maps." % map_name)
-            map_data = self.preloaded_maps[map_name]
-            self.clear_preloaded_maps()
-
-        self.current_map = map_data["data"]
-        self.collision_map = map_data["collision_map"]
-        self.collision_lines_map = map_data["collision_lines_map"]
-        self.map_size = map_data["map_size"]
-
-        # The first coordinates that are out of bounds.
-        self.invalid_x = (-1, self.map_size[0] + 1)
-        self.invalid_y = (-1, self.map_size[1] + 1)
-
-        # TODO: remove this monkey [patching!] business for the main control/game
-        self.game.events = map_data["events"]
-        self.game.inits = map_data["inits"]
-        self.game.interacts = map_data["interacts"]
-        self.game.event_engine.reset()
-        self.game.event_engine.current_map = map_data
-
-        # Clear out any existing NPCs
-        self.npcs = {}
-        self.npcs_off_map = {}
-        self.add_player(self.game.player1)
-
-        # reset controls and stop moving to prevent player from
-        # moving after the teleport and being out of control
-        self.stop_player()
-
-        # move to spawn position, if any
-        for eo in self.game.events:
-            if eo.name.lower() == "player spawn":
-                self.player1.set_position((eo.x, eo.y))
-
-    def load_map(self, map_name):
-        """ Returns map data as a dictionary to be used for map changing and preloading
-        """
-        map_data = {}
-        map_data["data"] = Map(map_name)
-        map_data["events"] = map_data["data"].events
-        map_data["inits"] = map_data["data"].inits
-        map_data["interacts"] = map_data["data"].interacts
-        map_data["collision_map"], map_data["collision_lines_map"], map_data["map_size"] = \
-            map_data["data"].loadfile()
-
-        return map_data
-
-    def preload_map(self, map_name):
-        """ Preload a map for quicker access
-
-        :param map_name:
-        :return: None
-        """
-        self.preloaded_maps[map_name] = self.load_map(map_name)
-
-    def clear_preloaded_maps(self):
-        """ Clear the preloaded maps cache
-
-        :return: None
-        """
-        self.preloaded_maps = {}
-
     def check_interactable_space(self):
         """Checks to see if any Npc objects around the player are interactable. It then populates a menu
         of possible actions.
@@ -893,14 +475,14 @@ class WorldState(state.State):
         :returns: True if there is an Npc to interact with.
 
         """
-        collision_dict = self.player1.get_collision_map(self)
-        player_tile_pos = nearest(self.player1.tile_pos)
-        collisions = self.player1.collision_check(player_tile_pos, collision_dict, self.collision_lines_map)
+        collision_dict = self.player_npc.get_collision_map(self)
+        player_tile_pos = nearest(self.player_npc.tile_pos)
+        collisions = self.player_npc.collision_check(player_tile_pos, collision_dict, self.collision_lines_map)
         if not collisions:
             pass
         else:
             for direction in collisions:
-                if self.player1.facing == direction:
+                if self.player_npc.facing == direction:
                     if direction == "up":
                         tile = (player_tile_pos[0], player_tile_pos[1] - 1)
                     elif direction == "down":
