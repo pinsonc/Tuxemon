@@ -95,8 +95,8 @@ class EventEngine(object):
 
     """
 
-    def __init__(self, game):
-        self.game = game
+    def __init__(self, world):
+        self.world = world
 
         self.conditions = dict()
         self.actions = dict()
@@ -193,7 +193,7 @@ class EventEngine(object):
             logger.error(error)
 
         else:
-            return action(self.game, parameters)
+            return action(self.world, parameters)
 
     def get_condition(self, name):
         """ Get a condition that is loaded into the engine
@@ -231,7 +231,7 @@ class EventEngine(object):
             logger.debug('map condition "{}" is not loaded'.format(cond_data.type))
             return False
 
-        result = map_condition.test(self.game, cond_data) == (cond_data.operator == 'is')
+        result = map_condition.test(self.world, cond_data) == (cond_data.operator == 'is')
         logger.debug('map condition "{}": {} ({})'.format(map_condition.name, result, cond_data))
         return result
 
@@ -345,12 +345,12 @@ class EventEngine(object):
         # do the "init" events.  this will be done just once
         # TODO: find solution that doesn't nuke the init list
         # TODO: make event engine generic, so can be used in global scope, not just maps
-        if self.game.inits:
-            self.process_map_events(self.game.inits)
-            self.game.inits = list()
+        if self.world.inits:
+            self.process_map_events(self.world.inits)
+            self.world.inits = list()
 
         # process any other events
-        self.process_map_events(self.game.events)
+        self.process_map_events(self.world.events)
 
     def update_running_events(self, dt):
         """ Update the events that are running
@@ -445,7 +445,7 @@ class EventEngine(object):
         """
         # has the player pressed the action key?
         if event.pressed and event.button == buttons.A:
-            for map_event in self.game.interacts:
+            for map_event in self.world.interacts:
                 self.process_map_event(map_event)
 
         return event

@@ -54,7 +54,7 @@ def main(load_slot=None):
     from tuxemon.core.control import Control
 
     prepare.init()
-    control = Control(prepare.ORIGINAL_CAPTION)
+    control = Control(prepare.CONFIG)
     control.auto_state_discovery()
 
     # global/singleton hack for now
@@ -72,14 +72,12 @@ def main(load_slot=None):
     # control.push_state("StartState")
 
     player = Player(prepare.CONFIG.player_npc)
-    player.map = prepare.CONFIG.starting_map
-    print(player.map, prepare.CONFIG.starting_map)
-    assert player.map == "bedroom_test.tmx"
-    world = World()
-    world.add_entity(player)
-    state = control.push_state("WorldState", world=world)
-    state.set_player_npc(player)
     player.tile_pos = 5, 5
+    player.map_name = prepare.CONFIG.starting_map
+    player.map_name = "map1.tmx"
+    control.world.add_entity(player)
+    state = control.push_state("WorldState", world=control.world)
+    state.set_player_npc(player)
 
     # if load_slot:
     #     control.push_state("LoadMenuState", load_slot=load_slot)

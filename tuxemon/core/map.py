@@ -1,4 +1,11 @@
+import logging
+
+from tuxemon.compat import Rect
 from tuxemon.core.euclid import Point2, Vector3, Vector2
+from tuxemon.core.tools import nearest
+
+logger = logging.getLogger(__name__)
+
 
 # direction => vector
 dirs3 = {
@@ -105,27 +112,43 @@ class PathfindNode(object):
         return s
 
 
-class Map(object):
+class TuxemonMap(object):
     """
-    needs new name.  this handles the entities, actions and map of a single map
+    Contains collisions geometry and events loaded from a file
+
+    Supports entity movement and pathfinding
     """
 
-    def __init__(self):
-        # Collision lines (player can walk in tiles, but cannot cross
-        # from one to another) Items in this list should be in the
-        # form of pairs, signifying that it is NOT possible to travel
-        # from the first tile to the second (but reverse may be
-        # possible, i.e. jumping) All pairs of tiles must be adjacent
-        # (not diagonal)
-        self.events = list()
-        self.inits = list()
-        self.interacts = list()
+    def __init__(self, events, inits, interacts, collision_map, collisions_lines_map):
+        """ Constructor
+
+        Collision lines
+        Player can walk in tiles, but cannot cross
+        from one to another. Items in this list should be in the
+        form of pairs, signifying that it is NOT possible to travel
+        from the first tile to the second (but reverse may be
+        possible, i.e. jumping) All pairs of tiles must be adjacent
+        (not diagonal)
+
+        Collision Lines Map
+        Create a list of all pairs of adjacent tiles that are impassable (aka walls)
+        example: ((5,4),(5,3), both)
+
+        :param List events:
+        :param List inits:
+        :param List interacts:
+        :param Dict collision_map:
+        :param Dict collisions_lines_map:
+        """
+        self.events = events
+        self.inits = inits
+        self.interacts = interacts
+        self.collision_map = collision_map
+        self.collision_lines_map = collisions_lines_map
         self.npcs = dict()
-        # Create a map of all tiles that we cannot walk through
-        self.collision_map = dict()
-        # Create a list of all pairs of adjacent tiles that are impassable (aka walls)
-        # example: ((5,4),(5,3), both)
-        self.collision_lines_map = dict()
+
+    def update(self, time_delta):
+        pass
 
     ####################################################
     #            Pathfinding and Collisions            #
@@ -143,11 +166,12 @@ class Map(object):
         :rtype: dict
         :returns: A dictionary of collision tiles
         """
+        return dict()
         # TODO: overlapping tiles/objects by returning a list
         collision_dict = dict()
 
         # Get all the NPCs' tile positions
-        for npc in self.get_all_entities():
+        for npc in self.world.get_all_entities():
             pos = nearest(npc.tile_pos)
             collision_dict[pos] = {"entity": npc}
 
@@ -248,11 +272,11 @@ class Map(object):
         This checks for adjacent tiles while checking for walls,
         npcs, and collision lines, one-way tiles, etc
 
-        :param position: tuple
-        :param collision_map: dict
-        :param skip_nodes: set
+        :param Tuple position:
+        :param Dict collision_map:
+        :param Set skip_nodes:
 
-        :rtype: list
+        :rtype: List
         """
         # get tile-level and npc/entity blockers
         if collision_map is None:
@@ -283,8 +307,8 @@ class Map(object):
 
             # We only need to check the perimeter,
             # as there is no way to get further out of bounds
-            if position[0] in self.invalid_x or position[1] in self.invalid_y:
-                continue
+            # if position[0] in self.invalid_x or position[1] in self.invalid_y:
+            #     continue
 
             # check to see if this tile is separated by a wall
             if (position, direction) in self.collision_lines_map:
@@ -332,7 +356,7 @@ class Map(object):
         y = py + cy
         return x, y
 
-    def _collision_box_to_pgrect(self, box):
+    def _collision_box_to_rect(self, box):
         """Returns a pygame.Rect (in screen-coords) version of a collision box (in world-coords).
         """
 
@@ -340,11 +364,11 @@ class Map(object):
         x, y = self.get_pos_from_tilepos(box)
         tw, th = self.tile_size
 
-        return pygame.Rect(x, y, tw, th)
+        return Rect(x, y, tw, th)
 
-    def _npc_to_pgrect(self, npc):
+    def _npc_to_rect(self, npc):
         """Returns a pygame.Rect (in screen-coords) version of an NPC's bounding box.
         """
         pos = self.get_pos_from_tilepos(npc.tile_pos)
-        return pygame.Rect(pos, self.tile_size)
+        return Rect(pos, self.tile_size)
 

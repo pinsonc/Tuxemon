@@ -29,15 +29,15 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import logging
-import os.path
 import time
 
-import tuxemon.core.event.eventengine
-from tuxemon.core import prepare, cli, networking, rumble
+import pygame as pg
+
+from tuxemon.core import cli, networking, rumble
+from tuxemon.core.clock import Clock
 from tuxemon.core.platform import android
 from tuxemon.core.state import StateManager
-
-import pygame as pg
+from tuxemon.core.world import World
 
 logger = logging.getLogger(__name__)
 
@@ -45,34 +45,27 @@ logger = logging.getLogger(__name__)
 class Control(StateManager):
     """
 
-    Contains game loop and event handling
+    Contains game loop, platform event handling, and a single world
 
     """
 
-    def __init__(self, caption):
-        """
-        :param caption: The window caption to use for the game itself.
-        :type caption: str
-        :rtype: None
-        """
-        # Set up our game's configuration from the prepare module.
-        self.config = prepare.CONFIG
-        self.world = None
+    def __init__(self, config):
+        """ Constructor
 
+        :param TuxemonConfig config: Tuxemon game config/settings
+        """
+        super(Control, self).__init__()
+        self.config = config
+
+        # TODO: move out and into new PygameControl class
+        self.input_manager = None
+        self.screen = None
         self.init_platform()
 
-        self.caption = caption
-        self.done = False
-        self.fps = self.config.fps
-        self.show_fps = self.config.show_fps
+        self.world = World()
+        self.scheduler = Clock()
         self.current_time = 0.0
-        self.ishost = False
-        self.isclient = False
-
-        # somehow this value is being patched somewhere
-        self.events = list()
-        self.inits = list()
-        self.interacts = list()
+        self.exit = False
 
         # TODO: move out to state manager
         self.package = "tuxemon.core.states"
@@ -82,52 +75,43 @@ class Control(StateManager):
         self._state_resume_set = set()
         self._remove_queue = list()
 
-        # movie creation
-        self.frame_number = 0
-        self.save_to_disk = False
-
-        # Set up our networking for multiplayer.
-        self.server = networking.TuxemonServer(self)
-        self.client = networking.TuxemonClient(self)
+        # Set up our networked controller if enabled.
+        self.server = None
+        self.client = None
+        self.ishost = False
+        self.isclient = False
         self.controller_server = None
+        if self.config.net_controller_enabled:
+            self.server = networking.TuxemonServer(self)
+            self.client = networking.TuxemonClient(self)
+            self.controller_server = networking.ControllerServer(self)
+            # self.combat_engine = CombatEngine(self)
+            # self.combat_router = CombatRouter(self, self.combat_engine)
 
-        # Set up our combat engine and router.
-        # self.combat_engine = CombatEngine(self)
-        # self.combat_router = CombatRouter(self, self.combat_engine)
-
-        # Set up our game's event engine which executes actions based on
-        # conditions defined in map files.
-        self.event_engine = tuxemon.core.event.eventengine.EventEngine(self)
-        self.event_conditions = {}
-        self.event_actions = {}
-        self.event_persist = {}
-
-        # Set up a variable that will keep track of currently playing music.
+        # TODO: Move music handling into client view
         self.current_music = {"status": "stopped", "song": None, "previoussong": None}
 
-        # Set up the command line. This provides a full python shell for
-        # troubleshooting. You can view and manipulate any variables in
-        # the game.
-        self.exit = False  # Allow exit from the CLI
-        if self.config.cli:
-            self.cli = cli.CommandLine(self)
+        # TODO: This needs to be part of the current game session, but not directly
+        #       part of the World, Control, or ClientView
+        self.player1 = None
 
-        # Set up our networked controller if enabled.
-        if self.config.net_controller_enabled:
-            self.controller_server = networking.ControllerServer(self)
-
+        # TODO: move to platform
         # Set up rumble support for gamepads
         self.rumble_manager = rumble.RumbleManager()
         self.rumble = self.rumble_manager.rumbler
 
-        # TODO: moar players
-        self.player1 = None
+        # Set up the command line. This provides a full python shell for
+        # troubleshooting. You can view and manipulate any variables in
+        # the game.
+        if self.config.cli:
+            self.cli = cli.CommandLine(self)
 
     def init_platform(self):
         """ WIP.  Eventually make options for more input types/handlers
 
         :return:
         """
+        # leave imports here
         import pygame
         from tuxemon.core.platform.platform_pygame.events import PygameEventQueueHandler
 
@@ -179,7 +163,8 @@ class Control(StateManager):
             if game_event is None:
                 break
         else:
-            game_event = self.event_engine.process_event(game_event)
+            # If no states have handled the event, send it to the World
+            game_event = self.world.process_platform_event(game_event)
 
         return game_event
 
@@ -198,7 +183,7 @@ class Control(StateManager):
         screen = self.screen
         flip = pg.display.update
         clock = time.time
-        frame_length = (1. / self.fps)
+        frame_length = (1. / self.config.fps)
         time_since_draw = 0
         last_update = clock()
         fps_timer = 0
@@ -216,7 +201,7 @@ class Control(StateManager):
                 frames += 1
 
             fps_timer, frames = self.handle_fps(clock_tick, fps_timer, frames)
-            time.sleep(.001)
+            time.sleep(.01)
 
     def update(self, time_delta):
         """Main loop for entire game. This method gets update every frame
@@ -234,38 +219,22 @@ class Control(StateManager):
             android.wait_for_resume()
 
         # Update our networking
-        if self.controller_server:
+        if self.controller_server and self.controller_server:
             self.controller_server.update()
-
-        if self.client.listening:
+        if self.client and self.client.listening:
             self.client.update(time_delta)
-            self.add_clients_to_map(self.client.client.registry)
-
-        if self.server.listening:
+        if self.server and self.server.listening:
             self.server.update()
 
-        # get all the input waiting for use
-        events = self.input_manager.process_events()
-
-        # process the events and collect the unused ones
-        events = list(self.process_events(events))
-
         # TODO: phase this out in favor of event-dispatch
+        # get all the waiting input events, handle them, return the unused events
+        events = self.input_manager.process_events()
+        events = list(self.process_events(events))
         self.key_events = events
 
-        # Run our event engine which will check to see if game conditions
-        # are met and run an action associated with that condition.
-        self.event_data = {}
-        self.event_engine.update(time_delta)
-
-        if self.event_data:
-            logger.debug("Event Data:" + str(self.event_data))
-
         # Update the game engine
+        self.world.update(time_delta)
         self.update_states(time_delta)
-
-        if self.exit:
-            self.done = True
 
     def release_controls(self):
         """ Send inputs which release held buttons/axis
@@ -324,61 +293,22 @@ class Control(StateManager):
         for state in reversed(to_draw):
             state.draw(surface)
 
-        if self.config.collision_map:
-            self.draw_event_debug()
-
-        if self.save_to_disk:
-            filename = "snapshot%05d.tga" % self.frame_number
-            self.frame_number += 1
-            pg.image.save(self.screen, filename)
-
     def handle_fps(self, clock_tick, fps_timer, frames):
-        if self.show_fps:
+        """
+
+        :param clock_tick:
+        :param fps_timer:
+        :param frames:
+        :rtype: Tuple[Float, Float]
+        """
+        if self.config.show_fps:
             fps_timer += clock_tick
             if fps_timer >= 1:
-                with_fps = "{} - {:.2f} FPS".format(self.caption, frames / fps_timer)
+                with_fps = "{} - {:.2f} FPS".format(self.config.caption, frames / fps_timer)
                 pg.display.set_caption(with_fps)
                 return 0, 0
             return fps_timer, frames
         return 0, 0
-
-    def add_clients_to_map(self, registry):
-        """Checks to see if clients are supposed to be displayed on the current map. If
-        they are on the same map as the host then it will add them to the npc's list.
-        If they are still being displayed and have left the map it will remove them from
-        the map.
-
-        :param registry: Locally hosted Neteria client/server registry.
-
-        :type registry: Dictionary
-
-        :rtype: None
-        :returns: None
-
-        """
-        raise NotImplementedError("get_map_name is broken")
-
-        world = self.get_state_name("WorldState")
-        if not world:
-            return
-
-        world.npcs = {}
-        for client in registry:
-            if "sprite" in registry[client]:
-                sprite = registry[client]["sprite"]
-                client_map = registry[client]["map_name"]
-                # NOTE: get_map_name is broken
-                # current_map = self.get_map_name()
-
-                # Add the player to the screen if they are on the same map.
-                if client_map == current_map:
-                    if sprite.slug not in world.npcs:
-                        world.npcs[sprite.slug] = sprite
-
-                # Remove player from the map if they have changed maps.
-                elif client_map != current_map:
-                    if sprite.slug in world.npcs:
-                        del world.npcs[sprite]
 
     def get_state_name(self, name):
         """ Query the state stack for a state by the name supplied
@@ -390,90 +320,3 @@ class Control(StateManager):
             if state.__class__.__name__ == name:
                 return state
         return None
-
-    def broadcast_player_teleport_change(self):
-        """ Tell clients/host that player has moved or changed map after teleport
-
-        :return:
-        """
-        # Set the transition variable in event_data to false when we're done
-        self.game.event_data["transition"] = False
-
-        # Update the server/clients of our new map and populate any other players.
-        if self.game.isclient or self.game.ishost:
-            self.game.add_clients_to_map(self.game.client.client.registry)
-            self.game.client.update_player(self.player1.facing)
-
-        # Update the location of the npcs. Doesn't send network data.
-        for npc in self.npcs.values():
-            char_dict = {"tile_pos": npc.tile_pos}
-            networking.update_client(npc, char_dict, self.game)
-
-
-class HeadlessControl(Control, StateManager):
-    """Control class for headless server. Contains the game loop, and contains
-    the event_loop which passes events to States as needed.
-
-    :param: None
-    :rtype: None
-    :returns: None
-
-    """
-
-    def __init__(self):
-        self.done = False
-
-        self.clock = time.clock()
-        self.fps = 60.0
-        self.current_time = 0.0
-
-        # TODO: move out to state manager
-        self.package = "tuxemon.core.states"
-        self.state_dict = dict()
-        self._state_stack = list()
-
-        self.server = networking.TuxemonServer(self)
-        # self.server_thread = threading.Thread(target=self.server)
-        # self.server_thread.start()
-        self.server.server.listen()
-
-        # Set up our game's configuration from the prepare module.
-        self.config = prepare.HEADLESSCONFIG
-
-        # Set up the command line. This provides a full python shell for
-        # troubleshooting. You can view and manipulate any variables in
-        # the game.
-        self.exit = False  # Allow exit from the CLI
-        if self.config.cli:
-            self.cli = cli.CommandLine(self)
-
-    def update(self):
-        """Main loop for entire game. This method gets update every frame
-        by Asteria Networking's "listen()" function. Every frame we get the
-        amount of time that has passed each frame, check game conditions,
-        and draw the game to the screen.
-
-        :param None:
-
-        :rtype: None
-        :returns: None
-
-        """
-        # Get the amount of time that has passed since the last frame.
-        # self.time_passed_seconds = time.clock() - self.clock
-        # self.server.update()
-
-        if self.exit:
-            self.done = True
-
-    def main(self):
-        """Initiates the main game loop. Since we are using Asteria networking
-        to handle network events, we pass this core.control.Control instance to
-        networking which in turn executes the "main_loop" method every frame.
-        This leaves the networking component responsible for the main loop.
-        :param None:
-        :rtype: None
-        :returns: None
-        """
-        while not self.exit:
-            self.update()

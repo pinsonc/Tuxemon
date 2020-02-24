@@ -31,7 +31,7 @@ class ScheduledItem:
             return self.next_ts < other
 
 
-class Scheduler:
+class Scheduler(object):
     """Class for scheduling functions.
     """
 
@@ -43,7 +43,7 @@ class Scheduler:
                 Function to return the elapsed time of the application,
                 in time units.
         """
-        super().__init__()
+        super(Scheduler, self).__init__()
         self._time = time_function
         self._last_ts = -1
         self._times = collections.deque(maxlen=10)

@@ -69,7 +69,7 @@ class NPC(Entity):
 
     Pathfinding is accomplished by setting the path directly.
 
-    TODO: move the world position/movement code into a "Body" class
+    TODO: move the map position/movement code into a "Body" class
 
     To move one tile, simply set a path of one item.
     """
@@ -185,14 +185,14 @@ class NPC(Entity):
     def pathfind(self, destination):
         """ Find a path and also start it
 
-        Queries the world for a valid path
+        Queries the map for a valid path
 
         :param destination:
         :return:
         """
         # TODO: handle invalid paths
         self.pathfinding = destination
-        path = self.world.pathfind(tuple(self.tile_pos), destination)
+        path = self.map.pathfind(tuple(self.tile_pos), destination)
         if path:
             self.path = path
             self.next_waypoint()
@@ -200,7 +200,7 @@ class NPC(Entity):
     def check_continue(self):
         try:
             pos = tuple(int(i) for i in self.tile_pos)
-            direction_next = self.world.collision_map[pos]["continue"]
+            direction_next = self.map.collision_map[pos]["continue"]
             self.move_one_tile(direction_next)
         except (KeyError, TypeError):
             pass
@@ -269,7 +269,7 @@ class NPC(Entity):
         self.cancel_path()
 
     def move(self, time_passed_seconds):
-        """ Move the entity around the game world
+        """ Move the entity around the game map
 
         * check if the move_direction variable is set
         * set the movement speed
@@ -335,7 +335,7 @@ class NPC(Entity):
         :param tile:
         :return:
         """
-        return tile in self.world.get_exits(trunc(self.tile_pos)) or self.ignore_collisions
+        return tile in self.map.get_exits(trunc(self.tile_pos)) or self.ignore_collisions
 
     @property
     def move_destination(self):

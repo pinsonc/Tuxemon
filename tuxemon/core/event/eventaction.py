@@ -33,9 +33,6 @@ from collections import namedtuple
 
 from six.moves import zip_longest
 
-from tuxemon.core.control import Control  # for type introspection
-assert Control
-
 logger = logging.getLogger(__name__)
 
 
@@ -149,8 +146,6 @@ class EventAction(object):
         else:
             args = list()
         return cls(act_type, args)
-
-
 
     def cast_values(self, parameters):
         """ Change all the string values to the expected type

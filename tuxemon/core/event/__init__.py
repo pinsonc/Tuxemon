@@ -65,6 +65,7 @@ EventObject = namedtuple("eventobject", event_fields)
 __all__ = [
     "MapAction",
     "MapCondition",
+    "EventObject",
     "get_npc"
 ]
 

@@ -171,7 +171,7 @@ class MapView(object):
             # Renderers are specific to a single map.  If a map is not set,
             # there will be no renderer and there is no need to draw anything.
             if self.renderer is None:
-                map_name = self.tracked_npc.map
+                map_name = self.tracked_npc.map_name
                 filename = prepare.fetch("maps", map_name)
                 self.renderer = self.initialize_renderer(filename)
 

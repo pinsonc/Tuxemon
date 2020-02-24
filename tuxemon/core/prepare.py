@@ -77,7 +77,6 @@ with open(paths.USER_CONFIG_PATH, "w") as fp:
 
 # Set up the screen size and caption
 SCREEN_SIZE = CONFIG.resolution
-ORIGINAL_CAPTION = CONFIG.window_caption
 
 # Set the native tile size so we know how much to scale our maps
 TILE_SIZE = [16, 16]  # 1 tile = 16 pixels
@@ -130,7 +129,7 @@ def pygame_init():
 
     logger.debug("pygame init")
     pg.init()
-    pg.display.set_caption(ORIGINAL_CAPTION)
+    pg.display.set_caption(CONFIG.window_caption)
 
     fullscreen = pg.FULLSCREEN if CONFIG.fullscreen else 0
     flags = pg.HWSURFACE | pg.DOUBLEBUF | fullscreen

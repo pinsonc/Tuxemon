@@ -34,7 +34,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import logging
-from itertools import product
 
 import natsort
 import pytmx
@@ -44,8 +43,8 @@ from tuxemon.core.event import MapAction
 from tuxemon.core.event import MapCondition
 from tuxemon.core.event.eventaction import EventAction
 from tuxemon.core.event.eventcondition import EventCondition
-from tuxemon.core.map import Map
-from tuxemon.core.tools import round_to_divisible, split_escaped, snap_point, snap_rect, tiles_inside_aabb
+from tuxemon.core.map import TuxemonMap
+from tuxemon.core.tools import split_escaped, snap_point, snap_rect, tiles_inside_aabb
 
 logger = logging.getLogger(__name__)
 
@@ -93,13 +92,18 @@ class TMXMapLoader(object):
         :param filename: The path to the tmx map file to load.
         :type filename: String
 
-        :rtype: None
+        :rtype: TuxemonMap
         """
-        map = Map()
         data = pytmx.TiledMap(filename)
         tile_size = data.tilewidth, data.tileheight
+        events = list()
+        inits = list()
+        interacts = list()
+        collision_map = dict()
+        collision_lines_map = dict()
 
-        # Load all objects from the map file and sort them by their type.
+        return TuxemonMap(events, inits, interacts, collision_map, collision_lines_map)
+
         for obj in data.objects:
             if obj.type == 'collision':
                 self.process_region(obj, tile_size)
@@ -109,13 +113,15 @@ class TMXMapLoader(object):
                 self.process_line(obj, tile_size)
 
             elif obj.type == 'event':
-                map.events.append(self.load_event(obj, tile_size))
+                events.append(self.load_event(obj, tile_size))
 
             elif obj.type == 'init':
-                map.inits.append(self.load_event(obj, tile_size))
+                inits.append(self.load_event(obj, tile_size))
 
             elif obj.type == 'interact':
-                map.interacts.append(self.load_event(obj, tile_size))
+                interacts.append(self.load_event(obj, tile_size))
+
+        return TuxemonMap(events, inits, interacts, collision_map, collision_lines_map)
 
     def process_line(self, line, tile_size):
         """ Identify the tiles on either side of the line and block movement along it
