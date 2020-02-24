@@ -53,21 +53,6 @@ logger = logging.getLogger(__name__)
 npc_db = db.JSONDatabase()
 npc_db.load("npc")
 
-# reference direction and movement states to animation names
-# this dictionary is kinda wip, idk
-animation_mapping = {
-    True: {
-        'up': 'back_walk',
-        'down': 'front_walk',
-        'left': 'left_walk',
-        'right': 'right_walk'},
-    False: {
-        'up': 'back',
-        'down': 'front',
-        'left': 'left',
-        'right': 'right'}
-}
-
 
 def tile_distance(tile0, tile1):
     x0, y0 = tile0

@@ -1,3 +1,10 @@
+"""
+
+Anything that is rendered to the screen is handled here.
+Any visual representation of a game object should be handled here.
+
+"""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -17,44 +24,136 @@ from tuxemon.core.map import facing
 from tuxemon.core.prepare import CONFIG
 from tuxemon.core.tools import nearest
 
+# reference direction and movement states to animation names
+# this dictionary is kinda wip, idk
+animation_mapping = {
+    True: {
+        'up': 'back_walk',
+        'down': 'front_walk',
+        'left': 'left_walk',
+        'right': 'right_walk'},
+    False: {
+        'up': 'back',
+        'down': 'front',
+        'left': 'left',
+        'right': 'right'}
+}
+
+
+class MapSprite(object):
+    """ WIP.  View of an NPC on the map
+
+    This is largely the code from the NPC class
+
+    """
+
+    def __init__(self, sprite_name):
+        self.sprite_name = sprite_name
+        self.standing = dict()
+        self.sprite = dict()
+        self.width = 0
+        self.height = 0
+        self.moveConductor = pyganim.PygConductor()
+
+    def load_sprites(self):
+        """ Load sprite graphics
+
+        :return:
+        """
+        # Get all of the standing animation images
+        self.standing = {}
+        for standing_type in facing:
+            filename = "{}_{}.png".format(self.sprite_name, standing_type)
+            path = os.path.join("sprites", filename)
+            self.standing[standing_type] = load_and_scale(path)
+
+        # this is the size used for collision testing
+        self.width, self.height = self.standing["front"].get_size()
+
+        # avoid cutoff frames when steps don't line up with tile movement
+        frames = 3
+        frame_duration = (1000 / CONFIG.player_walkrate) / frames / 1000 * 2
+
+        # Load all of the player's sprite animations
+        anim_types = ['front_walk', 'back_walk', 'left_walk', 'right_walk']
+        for anim_type in anim_types:
+            images = [
+                'sprites/%s_%s.%s.png' % (
+                    self.sprite_name,
+                    anim_type,
+                    str(num).rjust(3, str('0'))
+                )
+                for num in range(4)
+            ]
+
+            frames = []
+            for image in images:
+                surface = load_and_scale(image)
+                frames.append((surface, frame_duration))
+
+            self.sprite[anim_type] = pyganim.PygAnimation(frames, loop=True)
+
+        # Have the animation objects managed by a conductor.
+        # With the conductor, we can call play() and stop() on all the animation objects
+        # at the same time, so that way they'll always be in sync with each other.
+        self.moveConductor.add(self.sprite)
+
+    def get_current_npc_surface(self, npc, layer):
+        """ Get the surfaces and layers for the sprite
+
+        :param int layer: The layer to draw the sprite on.
+        :return:
+        """
+
+        def get_frame(d, ani):
+            frame = d[ani]
+            try:
+                surface = frame.getCurrentFrame()
+                frame.rate = npc.moverate / CONFIG.player_walkrate
+                return surface
+            except AttributeError:
+                return frame
+
+        frame_dict = self.sprite if npc.moving else self.standing
+        state = animation_mapping[npc.moving][npc.facing]
+        return [(get_frame(frame_dict, state), npc.tile_pos, layer)]
+
 
 class MapView(object):
     """
 
     Render a map, npcs, etc
 
+    use `follow()` to keep the camera on a game entitiy
+
     """
 
-    def __init__(self, rect, world, map_data):
+    def __init__(self, rect, world, filename):
         self.rect = rect
         self.world = world
-        self.map_data = map_data
         self.map_animations = dict()
-        self.renderer = self.initialize_renderer()
         self.tracked_npc = None
+        self._sprites = dict()  # npc => sprite/avatar mapping
+        self.renderer = self.initialize_renderer(filename)
 
-    def initialize_renderer(self):
+    def initialize_renderer(self, filename):
         """ Initialize the renderer for the map and sprites
-
-        :rtype: pyscroll.BufferedRenderer
         """
+        # TODO: load tiles from the internal game format (pending
+        if prepare.CONFIG.scaling:
+            map_data = pytmx.TiledMap(filename,
+                                      image_loader=scaled_image_loader,
+                                      pixelalpha=True)
+            map_data.tilewidth, map_data.tileheight = prepare.TILE_SIZE
+        else:
+            map_data = load_pygame(filename, pixelalpha=True)
+
         self.map_animations = dict()
-        visual_data = pyscroll.data.TiledMapData(self.map_data)
+        visual_data = pyscroll.data.TiledMapData(map_data)
         clamp = True
         return pyscroll.BufferedRenderer(visual_data, prepare.SCREEN_SIZE, clamp_camera=clamp, tall_sprites=2)
 
-    @staticmethod
-    def load(filename):
-        if prepare.CONFIG.scaling:
-            data = pytmx.TiledMap(filename,
-                                  image_loader=scaled_image_loader,
-                                  pixelalpha=True)
-            data.tilewidth, data.tileheight = prepare.TILE_SIZE
-        else:
-            data = load_pygame(filename, pixelalpha=True)
-        return data
-
-    def set_tracked_npc(self, entity):
+    def follow(self, entity):
         self.tracked_npc = entity
 
     def draw(self, rect, surface):
@@ -79,8 +178,10 @@ class MapView(object):
 
         # get npc surfaces/sprites
         # TODO: filter by map
-        # for npc in self.world.get_all_entities_on_map(None):
-        #     world_surfaces.extend(npc.get_sprites())
+        for npc in self.world.get_all_entities_on_map(None):
+            sprite = MapSprite(npc.sprite_name)
+            sprite.load_sprites()
+            world_surfaces.extend(sprite.get_current_npc_surface(npc, 5))
 
         # get map_animations
         for anim_data in self.map_animations.values():
@@ -114,101 +215,6 @@ class MapView(object):
         # If we want to draw the collision map for debug purposes
         if prepare.CONFIG.collision_map:
             self.debug_drawing(surface)
-
-    def get_sprites(self, layer):
-        """ Get the surfaces and layers for the sprite
-        :param int layer: The layer to draw the sprite on.
-        :return:
-        """
-
-        def get_frame(d, ani):
-            frame = d[ani]
-            try:
-                surface = frame.getCurrentFrame()
-                frame.rate = self.moverate / CONFIG.player_walkrate
-                return surface
-            except AttributeError:
-                return frame
-
-        # TODO: move out to the world renderer
-        frame_dict = self.sprite if self.moving else self.standing
-        state = animation_mapping[self.moving][self.facing]
-        return [(get_frame(frame_dict, state), self.tile_pos, layer)]
-
-    def load_sprites(self):
-        """ Load sprite graphics
-
-        :return:
-        """
-        # TODO: refactor animations into renderer
-        # Get all of the player's standing animation images.
-        self.standing = {}
-        for standing_type in facing:
-            filename = "{}_{}.png".format(self.sprite_name, standing_type)
-            path = os.path.join("sprites", filename)
-            self.standing[standing_type] = load_and_scale(path)
-
-        self.playerWidth, self.playerHeight = self.standing["front"].get_size()  # The player's sprite size in pixels
-
-        # avoid cutoff frames when steps don't line up with tile movement
-        frames = 3
-        frame_duration = (1000 / CONFIG.player_walkrate) / frames / 1000 * 2
-
-        # Load all of the player's sprite animations
-        anim_types = ['front_walk', 'back_walk', 'left_walk', 'right_walk']
-        for anim_type in anim_types:
-            images = [
-                'sprites/%s_%s.%s.png' % (
-                    self.sprite_name,
-                    anim_type,
-                    str(num).rjust(3, str('0'))
-                )
-                for num in range(4)
-            ]
-
-            frames = []
-            for image in images:
-                surface = load_and_scale(image)
-                frames.append((surface, frame_duration))
-
-            self.sprite[anim_type] = pyganim.PygAnimation(frames, loop=True)
-
-        # Have the animation objects managed by a conductor.
-        # With the conductor, we can call play() and stop() on all the animation objects
-        # at the same time, so that way they'll always be in sync with each other.
-        self.moveConductor.add(self.sprite)
-
-    def debug_drawing(self, surface):
-        from pygame.gfxdraw import box
-
-        surface.lock()
-
-        # draw events
-        for event in self.game.events:
-            topleft = self.get_pos_from_tilepos((event.x, event.y))
-            size = self.project((event.w, event.h))
-            rect = topleft, size
-            box(surface, rect, (0, 255, 0, 128))
-
-        # We need to iterate over all collidable objects.  So, let's start
-        # with the walls/collision boxes.
-        box_iter = itertools.imap(self._collision_box_to_pgrect, self.collision_map)
-
-        # Next, deal with solid NPCs.
-        npc_iter = itertools.imap(self._npc_to_pgrect, self.npcs.values())
-
-        # draw noc and wall collision tiles
-        red = (255, 0, 0, 128)
-        for item in itertools.chain(box_iter, npc_iter):
-            box(surface, item, red)
-
-        # draw center lines to verify camera is correct
-        w, h = surface.get_size()
-        cx, cy = w // 2, h // 2
-        pygame.draw.line(surface, (255, 50, 50), (cx, 0), (cx, h))
-        pygame.draw.line(surface, (255, 50, 50), (0, cy), (w, cy))
-
-        surface.unlock()
 
     def get_pos_from_tilepos(self, tile_position):
         """ Returns the map pixel coordinate based on tile position.
@@ -244,3 +250,35 @@ class MapView(object):
         """
         pos = self.get_pos_from_tilepos(npc.tile_pos)
         return pygame.Rect(pos, self.tile_size)
+
+    def debug_drawing(self, surface):
+        from pygame.gfxdraw import box
+
+        surface.lock()
+
+        # draw events
+        for event in self.game.events:
+            topleft = self.get_pos_from_tilepos((event.x, event.y))
+            size = self.project((event.w, event.h))
+            rect = topleft, size
+            box(surface, rect, (0, 255, 0, 128))
+
+        # We need to iterate over all collidable objects.  So, let's start
+        # with the walls/collision boxes.
+        box_iter = itertools.imap(self._collision_box_to_pgrect, self.collision_map)
+
+        # Next, deal with solid NPCs.
+        npc_iter = itertools.imap(self._npc_to_pgrect, self.npcs.values())
+
+        # draw noc and wall collision tiles
+        red = (255, 0, 0, 128)
+        for item in itertools.chain(box_iter, npc_iter):
+            box(surface, item, red)
+
+        # draw center lines to verify camera is correct
+        w, h = surface.get_size()
+        cx, cy = w // 2, h // 2
+        pygame.draw.line(surface, (255, 50, 50), (cx, 0), (cx, h))
+        pygame.draw.line(surface, (255, 50, 50), (0, cy), (w, cy))
+
+        surface.unlock()

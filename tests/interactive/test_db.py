@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     # JSON way
     db = JSONDatabase()
-    db.load()
+    db.load_tiles()
 
     pprint.pprint(db.lookup("Bulbatux"))
     #pprint.pprint(db.lookup(1))

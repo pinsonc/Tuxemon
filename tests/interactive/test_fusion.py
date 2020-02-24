@@ -7,10 +7,10 @@ if __name__ == "__main__":
 
     # Load the sprite data.
     bulbasaur = Body()
-    bulbasaur.load('fusion/Bulbasaur.json')
+    bulbasaur.load_tiles('fusion/Bulbasaur.json')
 
     gyarados = Body()
-    gyarados.load('fusion/Gyarados.json')
+    gyarados.load_tiles('fusion/Gyarados.json')
 
     # Fuse the sprites.
     fuse(body=bulbasaur, face=gyarados)

@@ -102,8 +102,7 @@ class WorldState(state.State):
 
         map_name = "bedroom_test.tmx"
         map_path = prepare.fetch("maps", map_name)
-        map_data = MapView.load(map_path)
-        self.view = MapView(None, self.world, map_data)
+        self.view = MapView(None, self.world, map_path)
 
     def resume(self):
         """ Called after returning focus to this state
@@ -123,7 +122,7 @@ class WorldState(state.State):
         :return:
         """
         self.player_npc = entity
-        self.view.set_tracked_npc(entity)
+        self.view.follow(entity)
 
     def fade_and_teleport(self, duration=2):
         """ Fade out, teleport, fade in

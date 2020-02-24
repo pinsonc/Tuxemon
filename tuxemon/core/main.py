@@ -76,6 +76,7 @@ def main(load_slot=None):
     world.add_entity(player)
     state = control.push_state("WorldState", world=world)
     state.set_player_npc(player)
+    player.tile_pos = 5, 5
 
     # if load_slot:
     #     control.push_state("LoadMenuState", load_slot=load_slot)
