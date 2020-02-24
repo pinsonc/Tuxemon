@@ -356,6 +356,8 @@ class Control(StateManager):
         :returns: None
 
         """
+        raise NotImplementedError("get_map_name is broken")
+
         world = self.get_state_name("WorldState")
         if not world:
             return
@@ -365,7 +367,8 @@ class Control(StateManager):
             if "sprite" in registry[client]:
                 sprite = registry[client]["sprite"]
                 client_map = registry[client]["map_name"]
-                current_map = self.get_map_name()
+                # NOTE: get_map_name is broken
+                # current_map = self.get_map_name()
 
                 # Add the player to the screen if they are on the same map.
                 if client_map == current_map:
@@ -376,24 +379,6 @@ class Control(StateManager):
                 elif client_map != current_map:
                     if sprite.slug in world.npcs:
                         del world.npcs[sprite]
-
-    def get_map_name(self):
-        """Gets the map of the player.
-
-        :rtype: String
-        :returns: map_name
-
-        """
-        world = self.get_state_name("WorldState")
-        if not world:
-            return
-
-        map_path = world.current_map.filename
-
-        # extract map name from path
-        map_name = os.path.basename(map_path)
-
-        return map_name
 
     def get_state_name(self, name):
         """ Query the state stack for a state by the name supplied

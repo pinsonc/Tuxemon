@@ -69,6 +69,8 @@ class NPC(Entity):
 
     Pathfinding is accomplished by setting the path directly.
 
+    TODO: move the world position/movement code into a "Body" class
+
     To move one tile, simply set a path of one item.
     """
     party_limit = 6  # The maximum number of tuxemon this npc can hold
@@ -131,17 +133,10 @@ class NPC(Entity):
         # To move the npc, change the value to one of four directions: left, right, up or down.
         # The npc will then move one tile in that direction until it is set to None.
 
-        # TODO: move sprites into renderer so class can be used headless
-        self.playerHeight = 0
-        self.playerWidth = 0
-        # self.standing = {}  # Standing animation frames
-        # self.sprite = {}  # Moving animation frames
-        # self.moveConductor = self.new_move_conductor()
+        # TODO: pull values from the sprite, json, or some default
+        self.playerHeight = 16
+        self.playerWidth = 16
         self.rect = Rect(self.tile_pos, (self.playerWidth, self.playerHeight))  # Collision rect
-
-    def new_move_conductor(self):
-        from tuxemon.core.pyganim import PygConductor
-        return PygConductor()
 
     def get_state(self, game):
         """Prepares a dictionary of the npc to be saved to a file
@@ -154,7 +149,7 @@ class NPC(Entity):
 
         """
         return {
-            'current_map': game.get_map_name(),
+            'current_map': self.map,
             'facing': self.facing,
             'game_variables': self.game_variables,
             'inventory': encode_inventory(self.inventory),
@@ -320,8 +315,6 @@ class NPC(Entity):
         # TODO: its not possible to move the entity with physics b/c this stops that
         if not self.path:
             self.cancel_movement()
-            # stop walking animation
-            # self.moveConductor.stop()
 
     def move_one_tile(self, direction):
         """ Ask entity to move one tile
@@ -368,16 +361,7 @@ class NPC(Entity):
         direction = get_direction(self.tile_pos, target)
         self.facing = direction
         if self.valid_movement(target):
-            # pyganim has horrible clock drift.  even after one animation
-            # cycle, the time will be off.  drift causes the walking steps to not
-            # align with tiles and some frames will only last one game frame.
-            # using play to start each tile will reset the pyganim timer
-            # and prevent the walking animation frames from coming out of sync.
-            # it still occasionally happens though!
-            # eventually, there will need to be a global clock for the game,
-            # not based on wall time, to prevent visual glitches.
-            # self.moveConductor.play()
-            self.network_notify_start_moving(direction)
+            # self.network_notify_start_moving(direction)
             self.path_origin = tuple(self.tile_pos)
             self.velocity3 = self.moverate * dirs3[direction]
         else:

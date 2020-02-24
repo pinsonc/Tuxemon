@@ -112,6 +112,7 @@ class TuxemonConfig(object):
         # not configurable from the file yet
         self.mods = ["tuxemon"]
 
+        assert self.starting_map == "bedroom_test.tmx"
 
 class HeadlessConfig(object):
     """Handles loading of the configuration file for the headless server.

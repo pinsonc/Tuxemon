@@ -72,6 +72,9 @@ def main(load_slot=None):
     # control.push_state("StartState")
 
     player = Player(prepare.CONFIG.player_npc)
+    player.map = prepare.CONFIG.starting_map
+    print(player.map, prepare.CONFIG.starting_map)
+    assert player.map == "bedroom_test.tmx"
     world = World()
     world.add_entity(player)
     state = control.push_state("WorldState", world=world)

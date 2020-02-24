@@ -124,17 +124,22 @@ class MapView(object):
 
     Render a map, npcs, etc
 
-    use `follow()` to keep the camera on a game entitiy
+    use `follow()` to keep the camera on a game object/npc
 
     """
 
-    def __init__(self, rect, world, filename):
+    def __init__(self, rect, world):
+        """ Constructor
+
+        :param Rect rect: Area of screen to draw the map
+        :param World world: World to draw
+        """
         self.rect = rect
         self.world = world
         self.map_animations = dict()
         self.tracked_npc = None
         self._sprites = dict()  # npc => sprite/avatar mapping
-        self.renderer = self.initialize_renderer(filename)
+        self.renderer = None
 
     def initialize_renderer(self, filename):
         """ Initialize the renderer for the map and sprites
@@ -157,11 +162,21 @@ class MapView(object):
         self.tracked_npc = entity
 
     def draw(self, rect, surface):
+        """ Draw the view
+
+        :param Rect rect: Area to draw to
+        :param Surface surface: Target surface
+        """
+        if self.tracked_npc is not None:
+            # Renderers are specific to a single map.  If a map is not set,
+            # there will be no renderer and there is no need to draw anything.
+            if self.renderer is None:
+                map_name = self.tracked_npc.map
+                filename = prepare.fetch("maps", map_name)
+                self.renderer = self.initialize_renderer(filename)
+
         # interlace player sprites with tiles surfaces.
         world_surfaces = list()
-
-        if self.tracked_npc is None:
-            return
 
         # get player coords to center map
         cx, cy = nearest(self.project(self.tracked_npc.tile_pos))
